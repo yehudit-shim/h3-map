@@ -15,7 +15,7 @@ import { useUiStore } from '../state/uiStore.js'
 import { IconButton } from './Button.jsx'
 import { Slider } from './controls.jsx'
 import { EmptyState, Spinner } from './feedback.jsx'
-import { download, dropPosition, importLayersFile, nodeActions, nodeBounds, zoomToNode } from './layerActions.js'
+import { download, dropPosition, importLayersFile, nodeActions, nodeBounds, reloadSourceFile, zoomToNode } from './layerActions.js'
 import { LayerTypeIcon } from './layerIcons.jsx'
 import { Menu } from './Menu.jsx'
 
@@ -48,6 +48,27 @@ function RenameInput({ initial, onDone, label }) {
       }}
       className="h-6 w-full rounded border border-accent bg-raised px-1.5 text-[13px] outline-none"
     />
+  )
+}
+
+/** File sources restored from a saved project have no data: choose the file again. */
+function ReloadFileButton({ sourceId }) {
+  const inputRef = useRef(null)
+  return (
+    <>
+      <button type="button" className="cursor-pointer underline" onClick={() => inputRef.current?.click()}>Reload file…</button>
+      <input
+        ref={inputRef}
+        type="file"
+        className="hidden"
+        aria-label="Reload data file"
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          e.target.value = ''
+          if (file) reloadSourceFile(sourceId, file)
+        }}
+      />
+    </>
   )
 }
 
@@ -234,7 +255,7 @@ function NodeRow({ node, depth, index, count, parentVisible }) {
                 `Group · ${layerCount} layer${layerCount === 1 ? '' : 's'}`
               ) : (
                 <>
-                  {type?.label} · {source?.name ?? node.sourceId}
+                  {type?.label} · {source?.name ?? node.sourceId ?? 'web service'}
                   {entry?.featureCount != null && ` · ${entry.featureCount.toLocaleString('en-US')} features`}
                   {info?.resolution != null && ` · H3 res ${info.resolution} (${info.cellCount.toLocaleString('en-US')} cells)`}
                 </>
@@ -243,7 +264,7 @@ function NodeRow({ node, depth, index, count, parentVisible }) {
             {failed && (
               <div className="text-[12px] text-danger">
                 {entry.error}{' '}
-                <button type="button" className="cursor-pointer underline" onClick={() => useDataStore.getState().retry(node.sourceId)}>Retry</button>
+                {entry.needsFile ? <ReloadFileButton sourceId={node.sourceId} /> : <button type="button" className="cursor-pointer underline" onClick={() => useDataStore.getState().retry(node.sourceId)}>Retry</button>}
               </div>
             )}
             <OpacityRow node={node} />
@@ -288,7 +309,7 @@ function ManagerToolbar({ openProjectMenu }) {
   const hasGroups = useMemo(() => countNodes(tree) > flattenLayers(tree).length, [tree])
   return (
     <div className="flex items-center gap-0.5 border-b border-line px-2 py-1">
-      <IconButton label="Add layer" icon={Plus} size={15} className="h-7 w-7" onClick={() => useUiStore.getState().openLeftTab('data')} />
+      <IconButton label="Add layer" icon={Plus} size={15} className="h-7 w-7" onClick={() => useUiStore.getState().openAddLayer({ tab: 'sample' })} />
       <IconButton
         label={selectedCount > 1 ? `Group ${selectedCount} selected` : selectedCount === 1 ? 'Add selected to new group' : 'New group'}
         icon={FolderPlus}

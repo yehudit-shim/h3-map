@@ -230,6 +230,140 @@ await page.getByRole('tab', { name: 'Style' }).click()
 check('reload restores layer styles', (await page.getByRole('switch', { name: '3D extrusion' }).getAttribute('aria-checked')) === 'true')
 await page.waitForTimeout(1500)
 
+// 7d. Phase 4: user data (GeoJSON file / URL, CSV, XYZ) through the Add layer dialog
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')
+const CORS = { 'access-control-allow-origin': '*' }
+const geo = (...features) => JSON.stringify({ type: 'FeatureCollection', features })
+const feat = (geometry, properties = {}) => ({ type: 'Feature', properties, geometry })
+const remoteGeo = geo(feat({ type: 'Point', coordinates: [2.35, 48.85] }, { n: 1 }), feat({ type: 'Point', coordinates: [2.4, 48.9] }, { n: 2 }))
+let tileHits = 0
+await page.route('https://example.test/data.geojson', (r) => r.fulfill({ status: 200, contentType: 'application/json', headers: CORS, body: remoteGeo }))
+await page.route('https://tiles.example.test/**', (r) => { tileHits++; r.fulfill({ status: 200, contentType: 'image/png', headers: CORS, body: PNG }) })
+await page.route('https://broken.example.test/**', (r) => r.fulfill({ status: 404, headers: CORS, body: 'nope' }))
+const openAdd = async (tabName) => {
+  await page.locator('header').getByRole('button', { name: 'Add layer' }).click()
+  await page.getByRole('tab', { name: tabName, exact: true }).click()
+}
+const waitLayers = (n) => page.waitForFunction((count) => document.querySelectorAll('[data-testid^=layer-row-]').length === count, n, { timeout: 20000 })
+const base = await page.locator('[data-testid^=layer-row-]').count()
+
+// GeoJSON file: Point + MultiPolygon + GeometryCollection (splits into 2)
+await openAdd('GeoJSON')
+await page.locator('[role=dialog] input[type=file]').setInputFiles({
+  name: 'small.geojson', mimeType: 'application/geo+json',
+  buffer: Buffer.from(geo(
+    feat({ type: 'Point', coordinates: [2.3, 48.8] }, { name: 'a', v: 1 }),
+    feat({ type: 'MultiPolygon', coordinates: [[[[2.2, 48.7], [2.3, 48.7], [2.3, 48.75], [2.2, 48.7]]], [[[2.4, 48.7], [2.5, 48.7], [2.5, 48.75], [2.4, 48.7]]]] }, { name: 'b', v: 2 }),
+    feat({ type: 'GeometryCollection', geometries: [{ type: 'Point', coordinates: [2.35, 48.9] }, { type: 'LineString', coordinates: [[2.3, 48.9], [2.4, 48.95]] }] }, { name: 'c', v: 3 }),
+  )),
+})
+await page.getByTestId('parse-result').waitFor({ timeout: 20000 })
+check('GeoJSON file parses in the worker: Multi* and GeometryCollection are supported', /^4 features/.test(await page.getByTestId('result-count').innerText()) && /GeometryCollection/.test(await page.getByTestId('parse-warnings').innerText()))
+await page.screenshot({ path: 'e2e/out/10-add-geojson.png' })
+await page.getByTestId('add-to-map').click()
+await waitLayers(base + 1)
+check('GeoJSON file layer is added to the tree and the dialog closes', (await page.getByRole('dialog').count()) === 0 && (await page.locator('[data-testid^=layer-row-]').first().innerText()).includes('small'))
+
+// projected coordinates are warned about
+await openAdd('GeoJSON')
+await page.locator('[role=dialog] input[type=file]').setInputFiles({ name: 'utm.geojson', mimeType: 'application/json', buffer: Buffer.from(geo(feat({ type: 'Point', coordinates: [452000, 5411000] }), feat({ type: 'Point', coordinates: [453000, 5412000] }))) })
+await page.getByTestId('parse-warnings').waitFor({ timeout: 20000 })
+check('projected coordinates produce a CRS warning', /projected/i.test(await page.getByTestId('parse-warnings').innerText()))
+await page.keyboard.press('Escape')
+check('Escape closes the Add layer dialog', (await page.getByRole('dialog').count()) === 0)
+
+// invalid file -> error state
+await openAdd('GeoJSON')
+await page.locator('[role=dialog] input[type=file]').setInputFiles({ name: 'bad.geojson', mimeType: 'application/json', buffer: Buffer.from('{ not json') })
+await page.getByTestId('parse-error').waitFor({ timeout: 20000 })
+check('an invalid file shows an error state', /not valid JSON/.test(await page.getByTestId('parse-error').innerText()))
+await page.keyboard.press('Escape')
+
+// CSV: columns cannot be detected -> manual picker, bad rows reported
+await openAdd('CSV')
+await page.locator('[role=dialog] input[type=file]').setInputFiles({ name: 'places.csv', mimeType: 'text/csv', buffer: Buffer.from('name,p,q,score\nA,48.80,2.30,5\nB,48.85,2.35,7\nC,oops,2.4,1\nD,48.9,2.45,\nE,95,2.5,3\n') })
+await page.getByTestId('csv-columns').waitFor({ timeout: 20000 })
+check('CSV without recognisable column names asks for the columns', (await page.getByTestId('csv-undetected').count()) === 1 && (await page.getByTestId('csv-load').isDisabled()))
+await page.getByLabel('Latitude column').selectOption('p')
+await page.getByLabel('Longitude column').selectOption('q')
+await page.getByTestId('csv-load').click()
+await page.getByTestId('parse-result').waitFor({ timeout: 20000 })
+check('CSV loads valid rows and reports the bad ones', /^3 features/.test(await page.getByTestId('result-count').innerText()) && /2 bad rows/.test(await page.getByTestId('bad-rows').innerText()))
+await page.getByTestId('bad-rows').locator('summary').click()
+check('bad rows list gives the reason', /not a number/.test(await page.getByTestId('bad-rows').innerText()))
+await page.screenshot({ path: 'e2e/out/11-add-csv.png' })
+await page.getByTestId('add-to-map').click()
+await waitLayers(base + 2)
+
+// CSV with detectable names (also picks the layer type in the dialog)
+await openAdd('CSV')
+await page.locator('[role=dialog] input[type=file]').setInputFiles({ name: 'cities.csv', mimeType: 'text/csv', buffer: Buffer.from('city,Latitude,Longitude,pop\nParis,48.85,2.35,2100000\nLyon,45.76,4.84,500000\n') })
+await page.getByTestId('csv-detected').waitFor({ timeout: 20000 })
+await page.getByTestId('csv-load').click()
+await page.getByTestId('parse-result').waitFor({ timeout: 20000 })
+await page.getByLabel('Layer type').selectOption('h3')
+await page.getByTestId('add-to-map').click()
+await waitLayers(base + 3)
+check('CSV columns are auto-detected and any point layer type can be chosen', true)
+
+// URL source
+await openAdd('GeoJSON')
+await page.getByRole('radio', { name: 'URL' }).click()
+await page.getByLabel('GeoJSON URL').fill('https://example.test/data.geojson')
+await page.getByRole('button', { name: 'Load', exact: true }).click()
+await page.getByTestId('parse-result').waitFor({ timeout: 20000 })
+await page.getByTestId('add-to-map').click()
+await waitLayers(base + 4)
+check('GeoJSON from a URL loads', true)
+
+// XYZ tiles with attribution; a broken tile server is reported
+await openAdd('XYZ / WMS')
+await page.getByLabel('Layer name (optional)').fill('Test tiles')
+await page.getByLabel('Tile URL template').fill('https://tiles.example.test/{z}/{x}/{y}.png')
+await page.locator('#web-attribution').fill('© Example tiles')
+await page.getByTestId('add-web-layer').click()
+await waitLayers(base + 5)
+await page.waitForFunction(() => document.body.innerText.includes('© Example tiles'), null, { timeout: 10000 })
+await page.waitForTimeout(2500)
+check('XYZ layer requests tiles and shows its attribution', tileHits > 0 && (await page.getByTestId('attribution').innerText()).includes('© Example tiles'), `${tileHits} tile requests`)
+await openAdd('XYZ / WMS')
+await page.getByLabel('Layer name (optional)').fill('Broken tiles')
+await page.getByLabel('Tile URL template').fill('https://broken.example.test/{z}/{x}/{y}.png')
+await page.getByTestId('add-web-layer').click()
+await page.getByText(/Tiles of "Broken tiles" failed to load/).waitFor({ timeout: 15000 })
+check('tile load errors are reported to the user', true)
+await page.locator('[data-testid^=layer-row-]').filter({ hasText: 'Broken tiles' }).first().locator('[data-node-name]').click()
+await page.getByLabel('Remove layer').click()
+// web layers have no data extent: zoom to layer is disabled
+await page.locator('[data-testid^=layer-row-]').filter({ hasText: 'Test tiles' }).first().locator('[data-node-name]').click()
+check('web layers cannot zoom to an extent', await page.getByLabel('Zoom to layer').isDisabled())
+await page.screenshot({ path: 'e2e/out/12-user-layers.png' })
+
+// drag and drop a file onto the map opens the CSV tab with the file already loaded
+await page.evaluate(() => {
+  const dt = new DataTransfer()
+  dt.items.add(new File(['name,lat,lon\nX,48.1,2.1\nY,48.2,2.2\n'], 'dropped.csv', { type: 'text/csv' }))
+  const main = document.querySelector('main')
+  main.dispatchEvent(new DragEvent('dragover', { dataTransfer: dt, bubbles: true, cancelable: true }))
+  main.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true, cancelable: true }))
+})
+await page.getByTestId('csv-detected').waitFor({ timeout: 20000 })
+check('dropping a CSV on the map opens the CSV tab with the file loaded', (await page.getByRole('tab', { name: 'CSV', selected: true }).count()) === 1)
+await page.keyboard.press('Escape')
+
+// persistence: only references are saved; after a reload the URL layer reloads and file layers ask for the file
+const saved = await page.evaluate(() => localStorage.getItem('h3map.layers'))
+check('saved layers contain no file data', !/"coordinates"/.test(saved) && /"fileName":"small.geojson"/.test(saved) && /example.test\/data.geojson/.test(saved))
+await page.reload({ waitUntil: 'load' })
+await page.waitForFunction(() => document.querySelectorAll('[data-testid^=layer-row-]').length > 5, null, { timeout: 15000 })
+await page.locator('[data-testid^=layer-row-]').filter({ hasText: 'small' }).first().locator('[data-node-name]').click()
+await page.getByRole('button', { name: 'Reload file…' }).waitFor({ timeout: 10000 })
+check('a file layer asks for its file again after a reload', true)
+await page.locator('input[aria-label="Reload data file"]').setInputFiles({ name: 'small.geojson', mimeType: 'application/json', buffer: Buffer.from(geo(feat({ type: 'Point', coordinates: [2.3, 48.8] }, { name: 'a', v: 1 }))) })
+await page.getByRole('button', { name: 'Reload file…' }).waitFor({ state: 'detached', timeout: 10000 })
+check('choosing the file again restores the layer', true)
+await page.waitForTimeout(500)
+
 // 8. basemap switch + theme
 await page.getByRole('button', { name: /Basemap:/ }).click()
 await page.getByRole('menuitemradio', { name: /Light/ }).click()

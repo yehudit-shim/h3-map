@@ -11,6 +11,11 @@ function LegendBody({ spec }) {
   if (spec.kind === 'swatch') {
     return <span className="inline-block h-3 w-3 rounded-sm border border-white/30" style={{ background: spec.color }} />
   }
+  if (spec.kind === 'note') return <div className="text-[10px] text-muted">{spec.text}</div>
+  if (spec.kind === 'image') {
+    // WMS GetLegendGraphic: hidden if the service has no legend for the layer.
+    return <img src={spec.src} alt={`Legend of ${spec.title}`} loading="lazy" className="max-h-40 max-w-full rounded-sm bg-white p-1" onError={(e) => (e.currentTarget.style.display = 'none')} />
+  }
   if (spec.kind === 'gradient') {
     return (
       <div>

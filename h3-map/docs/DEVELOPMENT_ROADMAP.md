@@ -3,9 +3,9 @@
 Legend: **Priority** Critical / High / Medium / Low. **Complexity** S (≤½ day), M (1-2 days), L (3-5 days), XL (>1 week). **MVP** marks tasks in the first release.
 Task block format: `- [ ] ID · Title` followed by Description / Tech / Deps / Priority · Complexity / Acceptance.
 
-## Implementation status (updated after Phase 3)
+## Implementation status (updated after Phase 4)
 
-Phases 1 and 2 were implemented together with the parts of Phases 3, 5 and 7 needed to deliver an interactive map backed by sample data (no database). Tasks marked `[x]` are complete and verified (unit tests, a browser end-to-end run in dev and production builds). Tasks that are only partly done are left unchecked with a note. **Not started:** P1-06, P1-07, P1-09, P1-10, P2-05, P2-06, P2-07 and everything in Phases 6, 8 and 9, plus the remaining Phase 10 tasks. See `SYSTEM_ARCHITECTURE.md` §11 for architectural changes made during implementation. **Phase 3 (layer management) is complete**; the Phase 3 section lists the two items left for later (map-canvas context menu, server-side project storage).
+Phases 1 and 2 were implemented together with the parts of Phases 3, 5 and 7 needed to deliver an interactive map backed by sample data (no database). Tasks marked `[x]` are complete and verified (unit tests, a browser end-to-end run in dev and production builds). Tasks that are only partly done are left unchecked with a note. **Not started:** P1-06, P1-07, P1-09, P1-10, P2-05, P2-06, P2-07 and everything in Phases 6, 8 and 9, plus the remaining Phase 10 tasks. See `SYSTEM_ARCHITECTURE.md` §11 for architectural changes made during implementation. **Phase 4 is implemented client-side only** (P4-01, P4-03, P4-05; P4-02, P4-04, P4-07 and P4-08 need the backend or were out of scope; see the Phase 4 section). **Phase 3 (layer management) is complete**; the Phase 3 section lists the two items left for later (map-canvas context menu, server-side project storage).
 
 ## MVP definition
 
@@ -150,8 +150,11 @@ P1-01 → P2-01 → P3-01 → P6-01 → P6-03 → P6-05 → (P4-02, P5-02, P7-01
 
 ## Phase 4: Standard GIS layers
 
-- [ ] **P4-01 · Vector layer from GeoJSON file/URL** (MVP)
-  - **Implementation status:** PARTIAL. GeoJSON FeatureCollections drive every layer (sample data via `data/sources.js`); loading a user GeoJSON file/URL and worker parsing are not done.
+**Status: client-side part complete** (P4-01, P4-03, P4-05). Not done: P4-02 (PostGIS), P4-04 (MVT), P4-06, P4-07, P4-08, P4-09. Verified by unit tests (parsers, jobs, source registry, layer types, project migration, dialog), the browser smoke test and `e2e/large-files.mjs` (50 MB GeoJSON, 500k-row CSV).
+
+- [x] **P4-01 · Vector layer from GeoJSON file/URL** (MVP)
+  - **Implementation status:** "Add layer" dialog (GeoJSON tab: file picker, URL; drag and drop of a file onto the map). Parsing runs in a Web Worker (`data/loaders/parse.worker.js`, logic in `jobs.js`, `geojsonParse.js`) with read/parse progress, cancel and error states; results come back in 20k-feature slices so no single message blocks the UI. All geometry types are accepted (Multi*, bare geometry/Feature, GeometryCollection is split into one feature per member). Fields and types (number/string) are inferred. CRS: a declared non-WGS84 `crs` and projected-looking coordinates produce warnings (projected data gets no extent, so zoom-to is disabled); no reprojection. User data is registered at runtime in `data/sources.js` via `data/userSources.js` (`kind: 'file'|'url'`, same `fields` + `load()` seam). Measured with a 50 MB / 222k-feature mixed file: parsing happens in the worker (longest main-thread task ~100 ms); adding it as a `geojson` layer blocks ~3.4 s on SwiftShader, which profiling attributes to WebGL shader linking, not data work (not measured on a real GPU). Not done: reprojection, streaming/incremental GeoJSON parsing (the whole file is read into memory), gzip, files over a few hundred MB, loaders.gl.
+  - Persistence: file data is never saved. Only a reference (name, file name, geometry, fields, CSV columns, or URL) goes into the project JSON and localStorage; a restored file layer shows "Reload file…", a URL layer reloads itself. Unused user sources and their cached data are freed when their last layer is removed.
   - Tech: loaders.gl or `fetch`; `GeoJsonLayer`; all geometry types incl. GeometryCollection; large-file worker parse; CRS check (GeoJSON is 4326).
   - Deps: P3-01 · Critical · M
   - Acceptance: points, lines, polygons, multi and collections render; 50 MB file parses off the main thread.
@@ -159,14 +162,16 @@ P1-01 → P2-01 → P3-01 → P6-01 → P6-03 → P6-05 → (P4-02, P5-02, P7-01
   - Tech: provider calling `/features` with viewport bbox, debounce, abort stale requests, `truncated` banner.
   - Deps: P6-05, P3-01 · Critical · L
   - Acceptance: panning reloads within a bbox; stale responses discarded; truncated banner appears when capped.
-- [ ] **P4-03 · CSV points layer** (MVP)
+- [x] **P4-03 · CSV points layer** (MVP)
+  - **Implementation status:** CSV tab (file or URL) using papaparse inside the same worker. Lat/lon columns are detected by name (lat/latitude/y, lon/lng/long/longitude/x and variants) and confirmed against the values; if that fails, or to override, a column picker lists all columns with a preview of the first rows. Column types (number/string) are inferred; identifiers with leading zeros stay text; decimal commas are accepted in coordinates. Bad rows (missing/non-numeric/out-of-range coordinates, wrong field count) are counted, listed with reasons, downloadable as CSV (first 10,000 recorded) and kept in the layer's Properties > Import report. A 500k-row, 21 MB CSV parses in ~4 s with a longest main-thread task of ~100 ms and the layer draws without a freeze. The result is a GeoJSON point source, so all point layer types work. Not done: other encodings than UTF-8, WKT/geometry columns, auto-continue without the confirm click, saving the bad-row list across reloads.
   - Tech: papaparse in worker, lat/lon column detection and manual pick, type inference.
   - Deps: P3-01 · High · M
   - Acceptance: bad rows reported; 500k rows load without freezing.
 - [ ] **P4-04 · MVT layer (external and backend)** (R2)
   - Tech: `MVTLayer`, auth headers via `loadOptions.fetch`, feature id for picking, `binary` option.
   - Deps: P6-07 · High · M · Acceptance: renders tiles from the backend and from a public MVT URL; picking works.
-- [ ] **P4-05 · XYZ raster and WMS layers** (R2)
+- [x] **P4-05 · XYZ raster and WMS layers** (R2)
+  - **Implementation status:** New sourceless layer types `xyz` (TileLayer + BitmapLayer; `{z}/{x}/{y}`, `{-y}`, `{s}`/`{a-c}` subdomains) and `wms` (deck.gl `_WMSLayer`, exported under that experimental name in 9.4.1), each with `defaults`, `controls`, `describe`, `legend` (WMS uses GetLegendGraphic), `validate` and `attribution`. Opacity is the normal layer opacity; attribution is shown bottom-left on the map; tile/image errors raise one notice per layer. Sourceless layers have `sourceId: null`; project schema is now **v2** (adds `sources`; v0/v1 files migrate), invalid or non-http(s) URLs are dropped on load, and zoom-to-layer is disabled for them (no data extent). Not done: WMS GetCapabilities browsing (layer names are typed in), extents for web layers, WMS GetFeatureInfo, TMS/WMTS (P4-09), credentials/headers.
   - Tech: `TileLayer`+`BitmapLayer`; `WMSLayer` (present in geo-layers 9.4.1).
   - Deps: P3-01 · Medium · M · Acceptance: tile source and WMS URL load with opacity control and attribution.
 - [ ] **P4-06 · FlatGeobuf** (R3) — streaming bbox reads via `flatgeobuf`. Deps: P4-01 · Low · M · Acceptance: a 200 MB .fgb renders with bbox-limited requests.

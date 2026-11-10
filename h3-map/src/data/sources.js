@@ -13,7 +13,7 @@
  * @property {string} id
  * @property {string} name
  * @property {string} description
- * @property {'sample'|'postgis'} kind
+ * @property {'sample'|'postgis'|'file'|'url'} kind  file/url = user-provided data (see userSources.js)
  * @property {'point'|'line'|'polygon'|'mixed'} geometry
  * @property {FieldInfo[]} fields
  * @property {() => Promise<import('geojson').FeatureCollection>} load
@@ -94,6 +94,20 @@ const SOURCES = [
 ]
 
 export const dataSources = SOURCES
+
+/** Add a source at runtime (user-loaded data). Replaces a source with the same id. */
+export function registerSource(source) {
+  const i = SOURCES.findIndex((s) => s.id === source.id)
+  if (i >= 0) SOURCES[i] = source
+  else SOURCES.push(source)
+  return source
+}
+
+export function unregisterSource(id) {
+  const i = SOURCES.findIndex((s) => s.id === id)
+  if (i >= 0) SOURCES.splice(i, 1)
+  return i >= 0
+}
 
 export function getSource(id) {
   return SOURCES.find((s) => s.id === id)

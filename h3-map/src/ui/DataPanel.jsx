@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Database, Plus } from 'lucide-react'
+import { Database, FilePlus2, Plus } from 'lucide-react'
 import { compatibleLayerTypes } from '../layers/index.js'
 import { dataSources } from '../data/sources.js'
 import { useDataStore } from '../state/dataStore.js'
@@ -11,7 +11,7 @@ import { Field, Select } from './controls.jsx'
 import { Badge, Section, Spinner } from './feedback.jsx'
 import { LayerTypeIcon } from './layerIcons.jsx'
 
-function SourceCard({ source }) {
+export function SourceCard({ source, onAdded }) {
   const types = compatibleLayerTypes(source)
   const [typeId, setTypeId] = useState(types[0]?.id)
   const entry = useDataStore((s) => s.entries[source.id])
@@ -27,6 +27,7 @@ function SourceCard({ source }) {
       else if (e?.status !== 'error') setTimeout(wait, 80)
     }
     wait()
+    onAdded?.(layer)
     return layer
   }
 
@@ -61,14 +62,21 @@ function SourceCard({ source }) {
 }
 
 export default function DataPanel() {
+  const samples = dataSources.filter((s) => s.kind === 'sample')
   return (
     <div>
+      <Section title="Your data">
+        <p className="mb-2 text-[12px] leading-snug text-muted">Load a GeoJSON or CSV file or URL, or add XYZ / WMS web layers. You can also drop a file on the map.</p>
+        <Button variant="solid" onClick={() => useUiStore.getState().openAddLayer({ tab: 'geojson' })} data-testid="open-add-layer">
+          <FilePlus2 size={14} aria-hidden="true" /> Add layer…
+        </Button>
+      </Section>
       <Section title="Sample datasets" action={<Database size={13} className="text-muted" aria-hidden="true" />}>
         <p className="mb-2 text-[12px] leading-snug text-muted">
           Synthetic data around Paris, generated in the browser. PostgreSQL/PostGIS tables will appear here in a later phase.
         </p>
         <ul className="space-y-2">
-          {dataSources.map((s) => (
+          {samples.map((s) => (
             <SourceCard key={s.id} source={s} />
           ))}
         </ul>

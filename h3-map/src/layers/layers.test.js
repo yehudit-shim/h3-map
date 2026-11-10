@@ -11,8 +11,8 @@ const entriesFor = async (...ids) =>
 const ctx = { autoResolution: 8, selection: null }
 
 describe('layer registry', () => {
-  it('registers all eight built-in types', () => {
-    expect(listLayerTypes().map((t) => t.id).filter((id) => id !== 'toy').sort()).toEqual(['geojson', 'h3', 'heatmap', 'hexagon', 'line', 'point', 'polygon', 'scatterplot'])
+  it('registers all ten built-in types (eight data layers, XYZ and WMS)', () => {
+    expect(listLayerTypes().map((t) => t.id).filter((id) => id !== 'toy').sort()).toEqual(['geojson', 'h3', 'heatmap', 'hexagon', 'line', 'point', 'polygon', 'scatterplot', 'wms', 'xyz'])
   })
   it('rejects duplicates and incomplete plugins', () => {
     expect(() => registerLayerType(getLayerType('point'))).toThrow(/already registered/)

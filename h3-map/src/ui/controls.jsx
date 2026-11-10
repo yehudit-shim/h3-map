@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import { cn } from '../lib/cn.js'
 import { rampGradientCss, RAMPS } from '../styling/colorRamps.js'
 
@@ -42,6 +42,34 @@ export function Slider({ value, onChange, min, max, step = 1, id, 'aria-label': 
       step={step}
       value={value}
       onChange={(e) => onChange(Number(e.target.value))}
+    />
+  )
+}
+
+/** Text field that applies its value on blur / Enter (so a half-typed URL does not trigger requests). */
+export function TextInput({ value, onCommit, placeholder, id, 'aria-label': ariaLabel, invalid }) {
+  const [draft, setDraft] = useState(null)
+  const commit = () => {
+    if (draft !== null && draft !== (value ?? '')) onCommit(draft)
+    setDraft(null)
+  }
+  return (
+    <input
+      id={id}
+      aria-label={ariaLabel}
+      type="text"
+      spellCheck={false}
+      autoComplete="off"
+      placeholder={placeholder}
+      aria-invalid={invalid || undefined}
+      value={draft ?? value ?? ''}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commit()
+        if (e.key === 'Escape') setDraft(null)
+      }}
+      className={cn('h-8 w-full rounded-md border bg-raised px-2 text-[13px] text-fg outline-none placeholder:text-muted focus-visible:border-accent', invalid ? 'border-danger' : 'border-line')}
     />
   )
 }

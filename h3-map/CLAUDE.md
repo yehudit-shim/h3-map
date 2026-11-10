@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-Phases 1-3 of `docs/DEVELOPMENT_ROADMAP.md` are implemented: a working MapLibre + deck.gl workspace with a QGIS-style layer tree (groups, drag and drop, properties, save/load), eight layer types and a real H3 demo, running on bundled sample data. There is no backend, database, Docker setup or CI yet (Phase 6 and later). `docs/` is the source of truth for design. `docs/SYSTEM_ARCHITECTURE.md` §11 lists where the implementation deliberately differs from the original design. The roadmap marks which tasks are done.
+Phases 1-3 and the client-side part of Phase 4 (GeoJSON/CSV files and URLs, XYZ and WMS layers) of `docs/DEVELOPMENT_ROADMAP.md` are implemented: a working MapLibre + deck.gl workspace with a QGIS-style layer tree (groups, drag and drop, properties, save/load), eight layer types and a real H3 demo, running on bundled sample data. There is no backend, database, Docker setup or CI yet (Phase 6 and later). `docs/` is the source of truth for design. `docs/SYSTEM_ARCHITECTURE.md` §11 lists where the implementation deliberately differs from the original design. The roadmap marks which tasks are done.
 
 The git root is the parent directory (`anastasia/`), not `h3-map/`.
 
@@ -26,6 +26,7 @@ Data flow: `LayerConfig` (plain JSON in `state/layersStore.js`) + loaded GeoJSON
 - **Persistence**: the tree is auto-saved to localStorage (`h3map.layers`). Saved data and imported files go through `layers/project.js` (`schemaVersion` migrations + validation). Bump `SCHEMA_VERSION` and add a migration when the config shape changes.
 - **Layer actions** (context menu, "More" button) come from one list in `ui/layerActions.js`. Add actions there, not per layer type.
 - **Data sources** are the seam for PostGIS: a source has `fields` and `load()` returning GeoJSON. Layer types only know GeoJSON plus field metadata.
+- **User data (Phase 4)**: files/URLs are parsed in a Web Worker (`data/loaders/`: `jobs.js` is the logic, `client.js` the worker client, pure parsers beside it) and registered at runtime by `data/userSources.js`. File data is memory-only; projects (schema v2) save just source references. Layer types with `sourceless: true` (`xyz`, `wms`) have `sourceId: null` and keep their service in `style`; `ui/layerActions.js` has `addParsedDataLayer`, `addWebLayer`, `reloadSourceFile`. The Add layer dialog is `ui/AddLayerDialog.jsx`. WMS is deck.gl's `_WMSLayer`.
 - **H3**: `layers/types/h3.js` bins points with `h3/h3Utils.js` (h3-js v4) and renders with `H3HexagonLayer`. Resolution is "auto" (derived from zoom in `useDeckLayers`, which selects only the integer resolution to avoid re-rendering on every zoom frame) or "fixed". `layers/types/hexagon.js` is deck.gl's generic binning and is NOT H3; keep the two distinct in names and UI.
 - Selection (`state/selectionStore.js`) stores the `describe()` result captured at click time. An H3 selection is cleared when the layer's resolution changes.
 - Design tokens are CSS variables in `src/styles/index.css`, exposed to Tailwind v4 as `bg-panel`, `text-muted`, `border-line`, etc. Use these, not raw colours. Dark/light is `data-theme` on `<html>`.

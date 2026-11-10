@@ -101,8 +101,8 @@ export default function Toolbar() {
       <div className="mx-1 h-5 w-px bg-line max-sm:hidden" />
       <SearchBox />
       <BasemapMenu />
-      <Button variant="outline" className="max-md:hidden" onClick={() => ui().openLeftTab('data')}>
-        <Database size={14} aria-hidden="true" /> Add data
+      <Button variant="outline" className="max-md:hidden" onClick={() => ui().openAddLayer({ tab: 'sample' })}>
+        <Database size={14} aria-hidden="true" /> Add layer
       </Button>
       <div className="ml-auto flex items-center gap-1">
         <IconButton label="Open layers" icon={LayersIcon} className="max-md:hidden" onClick={() => ui().openLeftTab('layers')} />

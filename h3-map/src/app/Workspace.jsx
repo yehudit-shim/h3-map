@@ -1,10 +1,14 @@
-import { useEffect, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { MapProvider } from 'react-map-gl/maplibre'
 import MapView from '../map/MapView.jsx'
 import MapRegistrar from '../map/MapRegistrar.jsx'
 import { useMapStore } from '../state/mapStore.js'
+import { notify } from '../state/notifyStore.js'
 import { useSelectionStore } from '../state/selectionStore.js'
 import { useUiStore } from '../state/uiStore.js'
+import AddLayerDialog from '../ui/AddLayerDialog.jsx'
+import { tabForFile } from '../ui/addLayer/names.js'
+import Attribution from '../ui/Attribution.jsx'
 import LayerProperties from '../ui/LayerProperties.jsx'
 import Legend from '../ui/Legend.jsx'
 import MapControls from '../ui/MapControls.jsx'
@@ -13,6 +17,8 @@ import Toolbar from '../ui/Toolbar.jsx'
 import { LeftSidebar, RightSidebar } from '../ui/Sidebars.jsx'
 import { Spinner, Toaster } from '../ui/feedback.jsx'
 import ErrorBoundary from './ErrorBoundary.jsx'
+
+const hasFiles = (e) => [...(e.dataTransfer?.types ?? [])].includes('Files')
 
 const PANEL_INSET = 336 // panel width (320) + gutters
 const WIDE_QUERY = '(min-width: 1024px)'
@@ -29,6 +35,18 @@ export default function Workspace() {
   const leftOpen = useUiStore((s) => s.leftOpen)
   const rightOpen = useUiStore((s) => s.rightOpen)
   const mapStatus = useMapStore((s) => s.mapStatus)
+  const [dragging, setDragging] = useState(false) // a file is being dragged over the map
+
+  // Dropping a GeoJSON / CSV file on the map opens the Add layer dialog on the right tab, file already chosen.
+  const onDrop = (e) => {
+    if (!hasFiles(e)) return
+    e.preventDefault()
+    setDragging(false)
+    const file = e.dataTransfer.files[0]
+    const tab = file && tabForFile(file)
+    if (!tab) notify(`"${file?.name ?? 'That file'}" is not a GeoJSON (.geojson, .json) or CSV (.csv) file.`, { kind: 'warn' })
+    else useUiStore.getState().openAddLayer({ tab, file })
+  }
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
@@ -41,7 +59,7 @@ export default function Workspace() {
       const ui = useUiStore.getState()
       if (e.key === '[') ui.setLeftOpen(!ui.leftOpen)
       if (e.key === ']') ui.setRightOpen(!ui.rightOpen)
-      if (e.key === 'Escape' && !e.defaultPrevented && !ui.propertiesId) useSelectionStore.getState().clear()
+      if (e.key === 'Escape' && !e.defaultPrevented && !ui.propertiesId && !ui.addLayerDialog) useSelectionStore.getState().clear()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -60,7 +78,18 @@ export default function Workspace() {
     <MapProvider>
       <div className="flex h-full flex-col" style={{ '--left-inset': `${leftInset - 8}px`, '--right-inset': `${rightInset - 8}px` }}>
         <Toolbar />
-        <main className="relative min-h-0 flex-1 overflow-hidden" aria-label="Map workspace">
+        <main
+          className="relative min-h-0 flex-1 overflow-hidden"
+          aria-label="Map workspace"
+          onDragOver={(e) => {
+            if (hasFiles(e)) {
+              e.preventDefault()
+              setDragging(true)
+            }
+          }}
+          onDragLeave={(e) => e.currentTarget.contains(e.relatedTarget) || setDragging(false)}
+          onDrop={onDrop}
+        >
           <ErrorBoundary name="map">
             <MapView />
             <MapRegistrar />
@@ -78,9 +107,18 @@ export default function Workspace() {
           <div className="absolute top-3 z-10 transition-[right] duration-150" style={{ right: rightInset }}>
             <MapControls />
           </div>
+          <div className="pointer-events-none absolute bottom-1 z-10 transition-[left] duration-150" style={{ left: leftInset }}>
+            <Attribution />
+          </div>
+          {dragging && (
+            <div className="pointer-events-none absolute inset-2 z-40 flex items-center justify-center rounded-xl border-2 border-dashed border-accent bg-accent/10 text-[14px] font-medium" data-testid="drop-overlay">
+              Drop a GeoJSON or CSV file to add it as a layer
+            </div>
+          )}
           <Toaster />
         </main>
         <LayerProperties />
+        <AddLayerDialog />
         <StatusBar />
       </div>
     </MapProvider>

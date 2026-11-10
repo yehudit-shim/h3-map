@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { Crosshair, Folder, SlidersHorizontal, X } from 'lucide-react'
+import { Crosshair, Download, Folder, SlidersHorizontal, X } from 'lucide-react'
+import { badRowsToCsv } from '../data/loaders/csvParse.js'
 import { getSource } from '../data/sources.js'
 import { getLayerType } from '../layers/index.js'
 import { effectiveLayers, findNode, flattenLayers, isGroup, layerIdsOf, pathOf } from '../layers/tree.js'
@@ -10,7 +11,7 @@ import { useRuntimeStore } from '../state/runtimeStore.js'
 import { useUiStore } from '../state/uiStore.js'
 import { Button, IconButton } from './Button.jsx'
 import { Section } from './feedback.jsx'
-import { nodeBounds, zoomToNode } from './layerActions.js'
+import { download, nodeBounds, zoomToNode } from './layerActions.js'
 import { LayerTypeIcon } from './layerIcons.jsx'
 
 function Rows({ rows }) {
@@ -38,6 +39,29 @@ function ExtentSection({ bounds }) {
   )
 }
 
+/** Warnings and bad rows of a user-loaded file/URL (kept in memory only). */
+function ImportReport({ entry }) {
+  const report = entry?.report
+  if (!entry?.warnings?.length && !report?.badCount) return null
+  return (
+    <Section title="Import report">
+      <ul className="space-y-1 text-[12px]" data-testid="import-report">
+        {(entry.warnings ?? []).map((w, i) => <li key={i} className="break-words text-warn">{w}</li>)}
+      </ul>
+      {report?.badCount > 0 && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-2"
+          onClick={() => download('bad-rows.csv', badRowsToCsv(report.bad, [...new Set(report.bad.flatMap((b) => Object.keys(b.values ?? {})))]), 'text/csv')}
+        >
+          <Download size={13} aria-hidden="true" /> Download bad rows (CSV)
+        </Button>
+      )}
+    </Section>
+  )
+}
+
 function LayerBody({ node, effective }) {
   const entry = useDataStore((s) => s.entries[node.sourceId])
   const info = useRuntimeStore((s) => s.info[node.id])
@@ -56,7 +80,12 @@ function LayerBody({ node, effective }) {
         />
         {type?.description && <p className="mt-2 text-[11px] leading-snug text-muted">{type.description}</p>}
       </Section>
-      <Section title="Data source">
+      {type?.sourceless && (
+        <Section title="Web service">
+          <Rows rows={type.describe?.(null, node)?.sections[0]?.rows ?? []} />
+        </Section>
+      )}
+      {!type?.sourceless && <Section title="Data source">
         <Rows
           rows={[
             ['Name', source?.name ?? node.sourceId],
@@ -68,8 +97,9 @@ function LayerBody({ node, effective }) {
             info?.cellCount != null && ['H3 cells', formatNumber(info.cellCount)],
           ]}
         />
-        {source?.description && <p className="mt-2 text-[11px] leading-snug text-muted">{source.description}</p>}
-      </Section>
+        {source?.description && <p className="mt-2 text-[11px] leading-snug text-muted break-words">{source.description}</p>}
+      </Section>}
+      <ImportReport entry={entry} />
       {source?.fields?.length > 0 && (
         <Section title={`Attributes (${source.fields.length})`}>
           <table className="w-full text-[12px]">

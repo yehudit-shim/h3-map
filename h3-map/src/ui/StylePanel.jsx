@@ -6,7 +6,7 @@ import { H3_MAX_RES, resolutionInfo } from '../h3/h3Utils.js'
 import { formatNumber } from '../lib/format.js'
 import { useLayersStore } from '../state/layersStore.js'
 import { useRuntimeStore } from '../state/runtimeStore.js'
-import { ColorInput, Field, RampSelect, Segmented, Select, Slider, Switch } from './controls.jsx'
+import { ColorInput, Field, RampSelect, Segmented, Select, Slider, Switch, TextInput } from './controls.jsx'
 import { EmptyState, Section } from './feedback.jsx'
 
 /** One control rendered from a layer type's control descriptor. */
@@ -27,6 +27,12 @@ export function ControlRow({ control, layer, source }) {
       return (
         <Field label={control.label} inline htmlFor={id}>
           <Switch label={control.label} checked={!!value} onChange={set} />
+        </Field>
+      )
+    case 'text':
+      return (
+        <Field label={control.label} htmlFor={id}>
+          <TextInput id={id} value={value} placeholder={control.placeholder} onCommit={set} />
         </Field>
       )
     case 'select':
@@ -76,7 +82,8 @@ export default function StylePanel() {
     <div>
       <div className="border-b border-line px-3 py-2.5">
         <div className="truncate text-[13px] font-semibold">{layer.name}</div>
-        <div className="text-[11px] text-muted">{type.label} · {source?.name}</div>
+        <div className="text-[11px] text-muted">{type.label} · {source?.name ?? 'web service'}</div>
+        {type.validate?.(layer.style) && <div className="mt-1 text-[11px] text-danger" role="alert">{type.validate(layer.style)}</div>}
       </div>
       {groups.map((g) => {
         const controls = type.controls.filter((c) => c.group === g && (!c.showIf || c.showIf(layer.style, source)))

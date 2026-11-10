@@ -3,6 +3,8 @@ import { createJSONStorage, persist } from 'zustand/middleware'
 import { createLayerConfig, forgetLayer, readProject, sanitizeTree, serializeProject, SCHEMA_VERSION } from '../layers/index.js'
 import * as T from '../layers/tree.js'
 import { migrateProject } from '../layers/project.js'
+import { pruneUserSources, restoreSourceRefs, sourceRefsFor } from '../data/userSources.js'
+import { useDataStore } from './dataStore.js'
 import { useSelectionStore } from './selectionStore.js'
 
 export const STORAGE_KEY = 'h3map.layers'
@@ -24,6 +26,12 @@ const withTree = (tree, extra = {}) => ({ tree, layers: T.flattenLayers(tree), .
 
 function forgetSubtree(node) {
   for (const id of T.layerIdsOf(node)) forgetLayer(id)
+}
+
+/** Free user-loaded sources (and their cached data) that no layer in the tree uses any more. */
+function pruneSources(tree) {
+  const removed = pruneUserSources(T.flattenLayers(tree).map((l) => l.sourceId))
+  if (removed.length) useDataStore.getState().forget(removed)
 }
 
 function clearSelectionIfGone(tree) {
@@ -76,6 +84,7 @@ export const useLayersStore = create(
           const gone = new Set(T.allIds([removed]))
           const s = get()
           commit(tree, { activeId: gone.has(s.activeId) ? null : s.activeId, selectedIds: s.selectedIds.filter((x) => !gone.has(x)) })
+          pruneSources(tree)
           clearSelectionIfGone(tree)
         },
         duplicateNode: (id) => {
@@ -138,6 +147,7 @@ export const useLayersStore = create(
           const { tree, problems } = readProject(input)
           for (const l of get().layers) forgetLayer(l.id)
           commit(tree, { activeId: null, selectedIds: [] })
+          pruneSources(tree)
           useSelectionStore.getState().clear()
           return { problems, count: T.flattenLayers(tree).length }
         },
@@ -145,7 +155,9 @@ export const useLayersStore = create(
         setTree: (tree) => commit(tree, { activeId: null, selectedIds: [] }),
         resetLayers: () => {
           for (const l of get().layers) forgetLayer(l.id)
-          commit(createInitialLayers(), { activeId: null, selectedIds: [] })
+          const tree = createInitialLayers()
+          commit(tree, { activeId: null, selectedIds: [] })
+          pruneSources(tree)
           useSelectionStore.getState().clear()
         },
 
@@ -159,13 +171,19 @@ export const useLayersStore = create(
       name: STORAGE_KEY,
       version: SCHEMA_VERSION,
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ tree: s.tree }),
-      migrate: (persisted, version) => ({ tree: migrateProject({ schemaVersion: version, layers: persisted?.tree ?? [] }).layers }),
+      // Only references to user-loaded data are saved (URL / file name / columns), never the data itself.
+      partialize: (s) => ({ tree: s.tree, sources: sourceRefsFor(s.layers) }),
+      migrate: (persisted, version) => {
+        const m = migrateProject({ schemaVersion: version, layers: persisted?.tree ?? [], sources: persisted?.sources })
+        return { tree: m.layers, sources: m.sources }
+      },
       // Saved configs are validated: unknown types/sources are dropped and new style defaults filled in.
       merge: (persisted, current) => {
         if (!persisted || !Array.isArray(persisted.tree)) return current
         try {
-          const { tree, problems } = sanitizeTree(persisted.tree)
+          const sourceProblems = restoreSourceRefs(persisted.sources)
+          const { tree, problems: layerProblems } = sanitizeTree(persisted.tree)
+          const problems = [...sourceProblems, ...layerProblems]
           if (problems.length) console.warn('Some saved layers could not be restored:', problems)
           // Nothing usable left (e.g. a layer type was removed): keep the current layers rather than an empty map.
           if (persisted.tree.length && !tree.length) return current

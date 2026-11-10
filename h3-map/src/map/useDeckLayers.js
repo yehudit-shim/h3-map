@@ -11,6 +11,11 @@ import { useRuntimeStore } from '../state/runtimeStore.js'
 import { useSelectionStore } from '../state/selectionStore.js'
 import { useUiStore } from '../state/uiStore.js'
 
+/** Tile / image load failures from raster layers: one toast per layer (de-duplicated by key). */
+function reportLayerError(layerId, message) {
+  notify(message, { kind: 'warn', key: `layer-error:${layerId}` })
+}
+
 /**
  * Bridges application state to deck.gl: loads the data every layer needs, builds deck layers from
  * layer configs, and provides picking handlers. This is the only place the stores and the layer
@@ -29,11 +34,11 @@ export function useDeckLayers() {
   // Ensure data for every layer is requested (idempotent).
   useEffect(() => {
     const ensure = useDataStore.getState().ensure
-    for (const l of configs) ensure(l.sourceId)
+    for (const l of configs) if (l.sourceId) ensure(l.sourceId) // web-map layers (XYZ, WMS) have no source
   }, [configs])
 
   const result = useMemo(
-    () => buildDeckLayers(drawn, entries, { autoResolution, selection: selected }),
+    () => buildDeckLayers(drawn, entries, { autoResolution, selection: selected, reportError: reportLayerError }),
     [drawn, entries, autoResolution, selected],
   )
   // Event handlers read the latest prepared data through a ref that is updated in an effect.

@@ -17,7 +17,7 @@ function visitCoords(coords, fn) {
   else for (const c of coords) visitCoords(c, fn)
 }
 
-function visitGeometry(geometry, fn) {
+export function visitGeometry(geometry, fn) {
   if (!geometry) return
   if (geometry.type === 'GeometryCollection') {
     for (const g of geometry.geometries) visitGeometry(g, fn)
@@ -114,4 +114,9 @@ export function unionBounds(list) {
     out = out ? [Math.min(out[0], b[0]), Math.min(out[1], b[1]), Math.max(out[2], b[2]), Math.max(out[3], b[3])] : [...b]
   }
   return out
+}
+
+/** True when a bounding box is a plausible lon/lat extent (not projected metres, not NaN). */
+export function isLonLatBounds(b) {
+  return Array.isArray(b) && b.every(Number.isFinite) && b[0] >= -180 && b[2] <= 180 && b[1] >= -90 && b[3] <= 90
 }

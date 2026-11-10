@@ -5,6 +5,9 @@ import {
   ArrowDown, ArrowUp, Copy, Crosshair, Eye, EyeOff, FolderInput, FolderOutput, FolderPlus, Info, Pencil, SlidersHorizontal, Trash2, Ungroup,
 } from 'lucide-react'
 import { isGroup, layerIdsOf, locate } from '../layers/tree.js'
+import { getSource } from '../data/sources.js'
+import { runParse } from '../data/loaders/client.js'
+import { createUserSource, setSourceData } from '../data/userSources.js'
 import { unionBounds } from '../lib/geo.js'
 import { zoomToBounds } from '../map/mapActions.js'
 import { useDataStore } from '../state/dataStore.js'
@@ -76,8 +79,47 @@ export function dropPosition(offsetY, height, { group = false, expanded = false 
   return 'inside'
 }
 
-export function download(filename, text) {
-  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }))
+/**
+ * Add a layer for freshly parsed user data (GeoJSON / CSV file or URL): registers the source, stores the
+ * data (already in memory, no second download), adds the layer on top and zooms to it.
+ * @param {{input: {format:string, origin:'file'|'url', name:string, fileName?:string, url?:string}, result: object, typeId: string, name?: string}} args
+ */
+export function addParsedDataLayer({ input, result, typeId, name }) {
+  const source = createUserSource(input, result)
+  useDataStore.getState().provide(source.id, result.data, { bounds: result.bounds, report: result.report, warnings: result.warnings })
+  const layer = useLayersStore.getState().addLayer(typeId, source.id, name?.trim() ? { name: name.trim() } : undefined)
+  useUiStore.getState().openLeftTab('layers')
+  const bounds = useDataStore.getState().entries[source.id]?.bounds
+  if (bounds) zoomToBounds(bounds)
+  return layer
+}
+
+/** Add a web-map layer (XYZ / WMS): no data source, the service is described by the style. */
+export function addWebLayer(typeId, { name, style, opacity = 1 }) {
+  const layer = useLayersStore.getState().addLayer(typeId, null, { ...(name?.trim() ? { name: name.trim() } : {}), style, opacity })
+  useUiStore.getState().openLeftTab('layers')
+  return layer
+}
+
+/** Supply the file again for a file source that was restored without its data. */
+export async function reloadSourceFile(sourceId, file) {
+  const source = getSource(sourceId)
+  if (!source || source.kind !== 'file') return false
+  try {
+    const result = await runParse({ format: source.format, source: { file }, csv: source.csv }).promise
+    if (result.geometry !== source.geometry) notify(`${file.name} contains ${result.geometry} data, but the layer was made for ${source.geometry} data. It may not draw.`, { kind: 'warn' })
+    setSourceData(sourceId, result)
+    useDataStore.getState().provide(sourceId, result.data, { bounds: result.bounds, report: result.report, warnings: result.warnings })
+    notify(`Loaded ${result.featureCount.toLocaleString('en-US')} features from ${file.name}`, { kind: 'success' })
+    return true
+  } catch (error) {
+    notify(`Could not load ${file.name}: ${error.message}`, { kind: 'error' })
+    return false
+  }
+}
+
+export function download(filename, text, type = 'application/json') {
+  const url = URL.createObjectURL(new Blob([text], { type }))
   const a = document.createElement('a')
   a.href = url
   a.download = filename

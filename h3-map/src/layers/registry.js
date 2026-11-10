@@ -4,6 +4,9 @@
 // {
 //   id, label, icon, description,
 //   geometry: ('point'|'line'|'polygon'|'mixed')[]   // source geometry classes this type can draw
+//   sourceless?: true                                   // web-map layers (XYZ, WMS): no data source, the service lives in `style`
+//   validate?(style) -> string|null                     // why a style cannot be drawn (checked when loading projects)
+//   attribution?(config) -> string|null                 // credit text shown on the map
 //   defaults(source) -> style                          // initial serialisable style
 //   controls: ControlDescriptor[]                      // schema for the generated style panel
 //   styleGroups?: ('data'|'appearance')[]              // groups shown in the Style panel (default: all)
