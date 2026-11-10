@@ -70,7 +70,7 @@ def map_db_error(exc: BaseException) -> ApiError:
         return ApiError(504, "query_timeout", "The query took too long. Narrow the bounding box or add a filter.")
     if isinstance(exc, pgerr.InsufficientPrivilege):
         return ApiError(403, "forbidden", "The database role has no access to this object.")
-    if isinstance(exc, (pgerr.UndefinedTable, pgerr.UndefinedColumn, pgerr.UndefinedSchema)):
+    if isinstance(exc, (pgerr.UndefinedTable, pgerr.UndefinedColumn, pgerr.InvalidSchemaName)):
         return ApiError(404, "not_found", "The requested database object does not exist.")
     if isinstance(exc, (pgerr.DataError, pgerr.InvalidTextRepresentation, pgerr.InvalidParameterValue)):
         return ApiError(422, "invalid_filter", "A value could not be used with the column type.")
