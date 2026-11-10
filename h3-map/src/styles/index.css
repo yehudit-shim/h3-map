@@ -1,0 +1,154 @@
+@import 'tailwindcss';
+
+/* ------------------------------------------------------------------
+ * Design tokens. Components use the semantic utilities below
+ * (bg-panel, text-fg, border-line, ...) and never raw colours, so a theme
+ * is just a different set of CSS variables. See docs/UI_UX_DESIGN.md §8.
+ * ------------------------------------------------------------------ */
+:root,
+[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0b0f14;
+  --panel: #131920;
+  --raised: #1b232d;
+  --hover: #222c38;
+  --line: #27313d;
+  --fg: #e6ebf1;
+  --muted: #8b98a8;
+  --accent: #22b8cf;
+  --accent-fg: #04181c;
+  --danger: #f06565;
+  --warn: #f2b84b;
+  --ok: #4cc38a;
+  --shadow: 0 8px 28px rgb(0 0 0 / 0.45);
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+  --bg: #eef1f5;
+  --panel: #ffffff;
+  --raised: #f3f5f8;
+  --hover: #e7ebf0;
+  --line: #d9dfe7;
+  --fg: #172029;
+  --muted: #5d6b7b;
+  --accent: #0a8ea3;
+  --accent-fg: #ffffff;
+  --danger: #d23d3d;
+  --warn: #b97a09;
+  --ok: #1f8f5c;
+  --shadow: 0 8px 24px rgb(20 30 45 / 0.16);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--panel);
+  --color-raised: var(--raised);
+  --color-hover: var(--hover);
+  --color-line: var(--line);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-danger: var(--danger);
+  --color-warn: var(--warn);
+  --color-ok: var(--ok);
+  --shadow-float: var(--shadow);
+  --font-sans: Inter, 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* thin scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+/* Range input styling (native, accessible) */
+input[type='range'] {
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  width: 100%;
+  cursor: pointer;
+}
+input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--panel);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+input[type='range']::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--panel);
+}
+
+/* MapLibre chrome restyled to the design tokens */
+.maplibregl-map {
+  font-family: var(--font-sans);
+}
+.maplibregl-ctrl-attrib {
+  background: color-mix(in srgb, var(--panel) 80%, transparent) !important;
+  color: var(--muted) !important;
+  font-size: 10px;
+}
+.maplibregl-ctrl-attrib a {
+  color: var(--muted) !important;
+}
+.maplibregl-ctrl-bottom-right {
+  /* keep attribution clear of the floating bottom-right UI */
+  margin-right: var(--right-inset, 0px);
+  transition: margin 160ms ease-out;
+}
+.maplibregl-ctrl-bottom-left {
+  margin-left: var(--left-inset, 0px);
+}
+
+/* deck.gl tooltip */
+.deck-tooltip {
+  background: var(--panel) !important;
+  color: var(--fg) !important;
+  border: 1px solid var(--line);
+  border-radius: 6px !important;
+  box-shadow: var(--shadow);
+  font-family: var(--font-sans) !important;
+  font-size: 12px !important;
+  padding: 6px 8px !important;
+  max-width: 260px;
+}

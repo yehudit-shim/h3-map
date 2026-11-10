@@ -1,0 +1,43 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Current state
+
+Phases 1-2 of `docs/DEVELOPMENT_ROADMAP.md` are implemented: a working MapLibre + deck.gl workspace with a layer manager, eight layer types and a real H3 demo, running on bundled sample data. There is no backend, database, Docker setup or CI yet (Phase 6 and later). `docs/` is the source of truth for design. `docs/SYSTEM_ARCHITECTURE.md` §11 lists where the implementation deliberately differs from the original design. The roadmap marks which tasks are done.
+
+The git root is the parent directory (`anastasia/`), not `h3-map/`.
+
+## Commands
+
+Run from `h3-map/`:
+
+- `npm run dev` starts Vite on :5173. Use `--port N --strictPort` if 5173 is taken.
+- `npm run build`, `npm run preview`, `npm run lint`
+- `npm test` runs Vitest (jsdom). One file: `npx vitest run src/layers/layers.test.js`. One test: `npx vitest run -t "name"`.
+- `npm run test:e2e` is a Playwright-core smoke test against a running app (`BASE_URL=http://localhost:5173`, `CHROME_PATH` if Chrome is not in a standard place). It needs WebGL, so it launches Chrome with SwiftShader flags.
+
+## Architecture (the parts that span files)
+
+Data flow: `LayerConfig` (plain JSON in `state/layersStore.js`) + loaded GeoJSON (`state/dataStore.js`, from the registry in `data/sources.js`) -> `layers/buildDeckLayers.js` -> deck.gl layers -> `map/DeckOverlay.jsx`. `map/useDeckLayers.js` is the only place the stores and the layer system meet. Do not import stores from `layers/` or sample data from layer types.
+
+- **Layer types are plugins** (`layers/types/*.js`, registered in `layers/index.js`). Each supplies `defaults`, `controls` (schema from which `ui/StylePanel.jsx` generates the form), `prepareKey`/`prepare` (expensive derived data, memoised per layer by `prepareKey`), `createDeckLayers`, `describe` (tooltip and inspector), `legend`. A new type needs no change to the map or UI. If a style input affects prepared data it must be part of `prepareKey`, and inputs to deck accessors must be in `updateTriggers`.
+- **Layer order**: index 0 of `layersStore.layers` is the top layer; `useDeckLayers` reverses it for deck.gl.
+- **Data sources** are the seam for PostGIS: a source has `fields` and `load()` returning GeoJSON. Layer types only know GeoJSON plus field metadata.
+- **H3**: `layers/types/h3.js` bins points with `h3/h3Utils.js` (h3-js v4) and renders with `H3HexagonLayer`. Resolution is "auto" (derived from zoom in `useDeckLayers`, which selects only the integer resolution to avoid re-rendering on every zoom frame) or "fixed". `layers/types/hexagon.js` is deck.gl's generic binning and is NOT H3; keep the two distinct in names and UI.
+- Selection (`state/selectionStore.js`) stores the `describe()` result captured at click time. An H3 selection is cleared when the layer's resolution changes.
+- Design tokens are CSS variables in `src/styles/index.css`, exposed to Tailwind v4 as `bg-panel`, `text-muted`, `border-line`, etc. Use these, not raw colours. Dark/light is `data-theme` on `<html>`.
+
+## Gotchas
+
+- MapLibre 6 needs its worker registered explicitly (`map/maplibreSetup.js`, `setWorkerUrl` with a Vite `?url` import); without it the basemap fails with "Worker failed to load". Keep that import in `MapView.jsx`.
+- Use the `@deck.gl/maplibre` `MapLibreOverlay` (not `MapboxOverlay`, which the umbrella `deck.gl` package does not export). Import map components from `react-map-gl/maplibre`.
+- h3-js is v4 (`latLngToCell`, `cellToBoundary`, `polygonToCells`); v3 names do not exist. H3 indexes are hex strings; never send them as JSON numbers.
+- deck.gl 9.4.1 has no GeoTIFF/COG layer.
+- Tailwind classes such as `hidden md:flex` lose to a base `flex` class on the same element; use `max-md:hidden` style variants.
+- Imports must match file name case exactly (Linux). `eslint` enforces react-hooks rules strictly (no ref writes during render).
+
+## Rules from the design docs
+
+- The browser never connects to PostgreSQL and never sends SQL; the FastAPI backend (not yet built) owns credentials and builds queries from structured filters.
+- Dependencies point one way: `ui -> state -> layers -> data/styling`.
