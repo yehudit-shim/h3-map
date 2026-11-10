@@ -65,6 +65,7 @@ export default function MapView() {
       mapStyle={basemap.style}
       minZoom={1}
       maxPitch={70}
+      boxZoom={false} // Shift+click adds H3 cells to the selection; Shift+drag box zoom would swallow the click
       attributionControl={false}
       style={{ position: 'absolute', inset: 0 }}
     >

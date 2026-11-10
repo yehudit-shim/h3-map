@@ -1,7 +1,8 @@
 import { H3HexagonLayer } from '@deck.gl/geo-layers'
 import { featuresToPoints } from '../../lib/geo.js'
 import { formatArea, formatCoord, formatNumber } from '../../lib/format.js'
-import { H3_MAX_RES, aggregateToH3, describeCell } from '../../h3/h3Utils.js'
+import { h3Service } from '../../h3/h3Client.js'
+import { H3_MAX_RES, MAX_DRAW_CELLS, aggregateToH3, describeCell } from '../../h3/h3Utils.js'
 import { createColorScale, createNormalizer } from '../../styling/colorScale.js'
 import { hexToRgba } from '../../styling/colorRamps.js'
 import { rgbaCss } from '../../styling/cssColor.js'
@@ -15,6 +16,7 @@ const AGGREGATIONS = [
   { value: 'max', label: 'Maximum of field' },
 ]
 
+// Synchronous fallback only (tests / callers that give no `ctx.computed`): the app aggregates in the H3 worker.
 // Point extraction is the expensive part of re-aggregating at a new resolution: do it once per dataset.
 const pointsCache = new WeakMap()
 function pointsOf(data) {
@@ -68,20 +70,49 @@ export default {
     { key: 'extruded', type: 'switch', label: '3D extrusion', group: 'appearance' },
     { key: 'maxHeight', type: 'range', label: 'Max height (m)', min: 100, max: 8000, step: 100, group: 'appearance', showIf: (s) => s.extruded },
   ],
+  // Async work: the host (map/useComputed.js) runs `compute.run` whenever `compute.key` changes and hands the
+  // newest finished result back as `ctx.computed[layerId]` (the previous result stays until the next arrives).
+  compute: {
+    key: (config, ctx) => keyOf(effectiveResolution(config.style, ctx), config.style.aggregation, config.style.aggregation === 'count' ? '' : config.style.valueField),
+    run: (config, data, ctx, { signal }) => {
+      const s = config.style
+      const numeric = (ctx.source?.fields ?? []).filter((f) => f.type === 'number' && f.name !== 'id').map((f) => f.name)
+      const valueField = s.aggregation === 'count' ? undefined : s.valueField
+      return h3Service.aggregateFeatures(
+        data,
+        valueField && !numeric.includes(valueField) ? [...numeric, valueField] : numeric,
+        { resolution: effectiveResolution(s, ctx), aggregation: s.aggregation, valueField, maxCells: MAX_DRAW_CELLS },
+        { slot: config.id, signal },
+      )
+    },
+  },
   prepareKey: (config, ctx) => {
     const s = config.style
-    return keyOf(effectiveResolution(s, ctx), s.aggregation, s.aggregation === 'count' ? '' : s.valueField, s.ramp, s.colorMode, s.classes, s.reverse)
+    const source = ctx.computed ? `w${ctx.computed[config.id]?.id ?? 'pending'}` : `s${effectiveResolution(s, ctx)}|${s.aggregation}|${s.aggregation === 'count' ? '' : s.valueField}`
+    return keyOf(source, s.ramp, s.colorMode, s.classes, s.reverse)
   },
   prepare(config, data, ctx) {
     const s = config.style
-    const resolution = effectiveResolution(s, ctx)
-    const cells = aggregateToH3(pointsOf(data), resolution, {
-      aggregation: s.aggregation,
-      valueField: s.aggregation === 'count' ? undefined : s.valueField,
-    })
+    let resolution
+    let cells
+    let requested
+    let ms
+    if (ctx.computed) {
+      const done = ctx.computed[config.id]?.value
+      resolution = done?.resolution ?? effectiveResolution(s, ctx)
+      requested = done?.requested ?? resolution
+      cells = done?.cells ?? []
+      ms = done?.ms
+    } else {
+      resolution = effectiveResolution(s, ctx)
+      cells = aggregateToH3(pointsOf(data), resolution, {
+        aggregation: s.aggregation,
+        valueField: s.aggregation === 'count' ? undefined : s.valueField,
+      })
+    }
     const values = cells.map((c) => c.value)
     const scale = createColorScale({ ramp: s.ramp, values, mode: s.colorMode, classes: s.classes, reverse: s.reverse })
-    return { cells, resolution, scale, heightNorm: createNormalizer(scale.meta.domain) }
+    return { cells, resolution, requested: requested ?? resolution, ms, scale, heightNorm: createNormalizer(scale.meta.domain) }
   },
   createDeckLayers(config, { cells, resolution, scale, heightNorm }, ctx) {
     const s = config.style
@@ -111,7 +142,7 @@ export default {
       layers.push(
         new H3HexagonLayer({
           id: `${config.id}::selection`,
-          data: [{ h3: sel.h3 }],
+          data: (sel.cells ?? [{ h3: sel.h3 }]).map((c) => ({ h3: c.h3 })),
           getHexagon: (d) => d.h3,
           filled: false,
           stroked: true,
@@ -158,7 +189,7 @@ export default {
       swatch: prepared ? rgbaCss(prepared.scale(object.value)) : undefined,
     }
   },
-  info: (prepared) => ({ resolution: prepared.resolution, cellCount: prepared.cells.length, domain: prepared.scale.meta.domain }),
+  info: (prepared) => ({ resolution: prepared.resolution, requested: prepared.requested, cellCount: prepared.cells.length, ms: prepared.ms, domain: prepared.scale.meta.domain }),
   legend: (config, { scale, resolution }) => ({
     ...scaleLegend(config.name, config.style.aggregation === 'count' ? 'point count' : `${config.style.aggregation} ${config.style.valueField}`, scale),
     subtitle: `H3 resolution ${resolution}`,

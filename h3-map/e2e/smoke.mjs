@@ -364,6 +364,103 @@ await page.getByRole('button', { name: 'Reload file…' }).waitFor({ state: 'det
 check('choosing the file again restores the layer', true)
 await page.waitForTimeout(500)
 
+// 7e. Phase 5: CSV -> H3 aggregation in the worker, resolution change, multi-select, overlays
+{
+  const rows = ['lat,lon,value']
+  for (let i = 0; i < 600; i++) rows.push(`${(48.84 + ((i * 37) % 100) * 0.0006).toFixed(5)},${(2.30 + ((i * 53) % 100) * 0.0009).toFixed(5)},${(i % 17) + 1}`)
+  const before = await page.locator('[data-testid^=layer-row-]').count()
+  await page.locator('header').getByRole('button', { name: 'Add layer' }).click()
+  await page.getByRole('tab', { name: 'CSV', exact: true }).click()
+  await page.locator('[role=dialog] input[type=file]').setInputFiles({ name: 'paris-points.csv', mimeType: 'text/csv', buffer: Buffer.from(rows.join('\n')) })
+  await page.getByTestId('csv-detected').waitFor({ timeout: 20000 })
+  await page.getByTestId('csv-load').click()
+  await page.getByTestId('parse-result').waitFor({ timeout: 20000 })
+  await page.getByLabel('Layer type').selectOption('h3')
+  await page.getByTestId('add-to-map').click()
+  await page.waitForFunction((n) => document.querySelectorAll('[data-testid^=layer-row-]').length === n, before + 1, { timeout: 20000 })
+  await page.locator('[data-testid^=layer-row-]').first().locator('[data-node-name]').click()
+  await page.getByRole('tab', { name: 'H3', exact: true }).click()
+  const readout = page.getByRole('tabpanel', { name: 'H3' }).getByTestId('h3-readout')
+  const cellsOf = async () => Number((await readout.innerText()).match(/Cells\s*([\d,]+)/)?.[1]?.replace(/,/g, '') ?? NaN)
+  await page.waitForFunction(() => /Cells\s*[\d,]+/.test([...document.querySelectorAll('[data-testid=h3-readout]')].map((e) => e.innerText).join(' ')), null, { timeout: 20000 })
+  check('a CSV point source is aggregated to H3 cells in the worker', (await cellsOf()) > 0 && /Worker time/.test(await readout.innerText()), (await readout.innerText()).replace(/\n/g, ' | '))
+
+  // resolution change recomputes (from the points cached in the worker)
+  await page.getByRole('radio', { name: 'Fixed' }).click()
+  const slider = page.getByLabel('H3 resolution')
+  const showRes = (r) => page.waitForFunction((res) => new RegExp(`Showing resolution\\s*${res} / 15`).test([...document.querySelectorAll('[data-testid=h3-readout]')].map((e) => e.innerText).join(' ')) && /Cells\s*[\d,]+/.test([...document.querySelectorAll('[data-testid=h3-readout]')].map((e) => e.innerText).join(' ')), r, { timeout: 20000 })
+  await slider.fill('7')
+  await showRes(7)
+  const c7 = await cellsOf()
+  await slider.fill('9')
+  await showRes(9)
+  const c9 = await cellsOf()
+  check('changing the resolution re-aggregates the cached points', c9 > c7 && c7 > 0, `res7=${c7} res9=${c9}`)
+  await slider.fill('8')
+  await showRes(8)
+  await page.waitForTimeout(1500)
+  await page.screenshot({ path: 'e2e/out/13-h3-from-csv.png' })
+
+  // select a cell by clicking on the map, then shift-click a neighbour
+  const box = await page.locator('main').boundingBox()
+  const statusSelected = async () => num(await page.getByTestId('status-selected').innerText())
+  let first = null
+  scan: for (let y = box.y + box.height * 0.25; y < box.y + box.height * 0.8; y += 24) {
+    for (let x = box.x + 380; x < box.x + box.width - 380; x += 24) {
+      await page.mouse.click(x, y)
+      if ((await statusSelected()) === 1 && (await page.getByTestId('inspector-layer').count()) && /paris-points/.test(await page.getByTestId('inspector-layer').innerText())) {
+        first = { x, y }
+        break scan
+      }
+    }
+  }
+  check('clicking an H3 cell of the CSV layer selects it', !!first)
+  if (first) {
+    const firstIndex = await page.getByTestId('selected-h3-index').innerText()
+    let added = false
+    // cells are ~100 px wide at this zoom: try the six neighbours, then two rings out
+    const offsets = [[98, 0], [-98, 0], [49, 85], [-49, 85], [49, -85], [-49, -85], [196, 0], [-196, 0], [98, 170], [-98, 170], [98, -170], [-98, -170]]
+    for (const [dx, dy] of offsets) {
+      await page.mouse.click(first.x, first.y) // plain click: (re)start from the first cell
+      await page.keyboard.down('Shift')
+      await page.mouse.click(first.x + dx, first.y + dy)
+      await page.keyboard.up('Shift')
+      if ((await statusSelected()) === 2) {
+        added = true
+        break
+      }
+    }
+    check('shift-click adds a second cell to the selection', added)
+    if (added) {
+      check('the inspector shows an aggregate summary for several cells', /^2$/.test(await page.getByTestId('summary-Cells selected').innerText()) && (await page.getByTestId('multi-summary').innerText()).includes('Total area'))
+      check('the primary cell is the last one added', (await page.getByTestId('selected-h3-index').innerText()) !== firstIndex)
+
+      // overlays: parent, children and k-ring follow the selection and are not layers in the tree
+      const layersBefore = await page.locator('[data-testid^=layer-row-]').count()
+      await page.getByRole('switch', { name: 'Parent outline' }).click()
+      await page.getByRole('switch', { name: 'Children outlines' }).click()
+      await page.getByRole('switch', { name: 'K-ring' }).click()
+      const count = async (k) => Number((await page.getByTestId(`overlay-count-${k}`).innerText()).replace(/,/g, ''))
+      check('parent overlay shows the parent cells', (await count('parent')) >= 1)
+      check('children overlay shows 7 children per selected cell', (await count('children')) === 14)
+      check('k-ring overlay shows the disk around the cells', (await count('kring')) >= 10)
+      check('children are limited to 4 levels', (await page.getByLabel(/Levels below/).locator('option').count()) === 4)
+      await page.waitForTimeout(1200)
+      await page.screenshot({ path: 'e2e/out/14-h3-overlays.png' })
+      check('overlays are not entries of the layer tree', (await page.locator('[data-testid^=layer-row-]').count()) === layersBefore)
+
+      // changing the resolution invalidates the selection: cleared with a notice, overlays gone
+      await slider.fill('7')
+      await showRes(7)
+      await page.getByText(/2 selected cells cleared/).waitFor({ timeout: 10000 })
+      check('a resolution change clears the selected cells with a notice', (await statusSelected()) === 0)
+      await page.getByRole('tab', { name: 'Inspector' }).click()
+      check('overlays disappear with the selection', (await page.getByTestId('overlay-count-parent').count()) === 0)
+    }
+  }
+  // tidy: the CSV layer stays (later checks only need the original layers)
+}
+
 // 8. basemap switch + theme
 await page.getByRole('button', { name: /Basemap:/ }).click()
 await page.getByRole('menuitemradio', { name: /Light/ }).click()

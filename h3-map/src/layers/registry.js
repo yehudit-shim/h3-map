@@ -7,6 +7,10 @@
 //   sourceless?: true                                   // web-map layers (XYZ, WMS): no data source, the service lives in `style`
 //   validate?(style) -> string|null                     // why a style cannot be drawn (checked when loading projects)
 //   attribution?(config) -> string|null                 // credit text shown on the map
+//   compute?: { key(config, ctx) -> string, run(config, data, ctx, {signal}) -> Promise<result> }
+//                                                       // background work (H3 aggregation in a worker): the host
+//                                                       // (map/useComputed.js) re-runs it when key changes and passes the
+//                                                       // newest result to prepare/prepareKey as ctx.computed[layerId]
 //   defaults(source) -> style                          // initial serialisable style
 //   controls: ControlDescriptor[]                      // schema for the generated style panel
 //   styleGroups?: ('data'|'appearance')[]              // groups shown in the Style panel (default: all)

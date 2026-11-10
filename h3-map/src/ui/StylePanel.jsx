@@ -2,7 +2,7 @@ import { SlidersHorizontal } from 'lucide-react'
 import { getLayerType } from '../layers/index.js'
 import { getSource } from '../data/sources.js'
 import { valueFieldsOf } from '../layers/common.js'
-import { H3_MAX_RES, resolutionInfo } from '../h3/h3Utils.js'
+import { H3_MAX_RES, MAX_DRAW_CELLS, resolutionInfo } from '../h3/h3Utils.js'
 import { formatNumber } from '../lib/format.js'
 import { useLayersStore } from '../state/layersStore.js'
 import { useRuntimeStore } from '../state/runtimeStore.js'
@@ -64,7 +64,11 @@ export function H3Readout({ layer }) {
     <div className="mb-1 rounded-md border border-line bg-raised/60 p-2 text-[12px]" data-testid="h3-readout">
       <div className="flex justify-between"><span className="text-muted">Showing resolution</span><span className="font-mono font-semibold text-accent">{info.resolution} / {H3_MAX_RES}</span></div>
       <div className="flex justify-between"><span className="text-muted">Avg edge · area</span><span className="font-mono">{edgeKm < 1 ? `${formatNumber(edgeKm * 1000)} m` : `${formatNumber(edgeKm)} km`} · {formatNumber(areaKm2)} km²</span></div>
-      <div className="flex justify-between"><span className="text-muted">Cells</span><span className="font-mono">{formatNumber(info.cellCount)}</span></div>
+      {info.requested != null && info.requested !== info.resolution && (
+        <div className="my-1 text-warn" role="status" data-testid="h3-coarsened">Resolution {info.requested} would need more than {formatNumber(MAX_DRAW_CELLS)} cells; showing {info.resolution}.</div>
+      )}
+      <div className="flex justify-between"><span className="text-muted">Cells</span><span className="font-mono">{info.loading ? 'aggregating…' : formatNumber(info.cellCount)}</span></div>
+      {info.ms != null && <div className="flex justify-between"><span className="text-muted">Worker time</span><span className="font-mono" data-testid="h3-worker-ms">{formatNumber(info.ms)} ms</span></div>}
     </div>
   )
 }

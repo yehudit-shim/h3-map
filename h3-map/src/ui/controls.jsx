@@ -74,15 +74,16 @@ export function TextInput({ value, onCommit, placeholder, id, 'aria-label': aria
   )
 }
 
-export function Switch({ checked, onChange, label }) {
+export function Switch({ checked, onChange, label, disabled }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
       aria-label={label}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={cn('relative h-5 w-9 shrink-0 cursor-pointer rounded-full border transition-colors', checked ? 'border-accent bg-accent' : 'border-line bg-raised')}
+      className={cn('relative h-5 w-9 shrink-0 cursor-pointer rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-40', checked ? 'border-accent bg-accent' : 'border-line bg-raised')}
     >
       <span className={cn('absolute top-0.5 h-3.5 w-3.5 rounded-full transition-all', checked ? 'left-[18px] bg-accent-fg' : 'left-0.5 bg-muted')} />
     </button>

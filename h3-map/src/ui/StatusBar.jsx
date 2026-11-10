@@ -20,7 +20,7 @@ export default function StatusBar() {
   const lat = useMapStore((s) => s.viewState.latitude)
   const pitch = useMapStore((s) => s.viewState.pitch)
   const bearing = useMapStore((s) => s.viewState.bearing)
-  const selected = useSelectionStore((s) => (s.selected ? 1 : 0))
+  const selected = useSelectionStore((s) => (s.selected ? (s.selected.cells?.length ?? 1) : 0))
   const layerCount = useLayersStore((s) => effectiveLayers(s.tree).filter((l) => l.visible).length)
   return (
     <footer className="z-20 flex h-7 shrink-0 items-center gap-4 overflow-hidden border-t border-line bg-panel px-3 text-[11px]" role="status" aria-label="Map status">
