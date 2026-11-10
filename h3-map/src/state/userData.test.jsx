@@ -66,10 +66,10 @@ describe('user data in the layers store', () => {
 })
 
 describe('AddLayerDialog', () => {
-  it('has the four tabs and adds an XYZ layer from the web tab', () => {
+  it('has the five tabs and adds an XYZ layer from the web tab', () => {
     useUiStore.getState().openAddLayer({ tab: 'web' })
     render(<AddLayerDialog />)
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Sample data', 'GeoJSON', 'CSV', 'XYZ / WMS'])
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Sample data', 'GeoJSON', 'CSV', 'XYZ / WMS', 'MVT URL'])
     fireEvent.change(screen.getByLabelText('Tile URL template'), { target: { value: 'https://t.example/tiles.png' } })
     fireEvent.click(screen.getByTestId('add-web-layer'))
     expect(screen.getByRole('alert')).toHaveTextContent('{z}') // invalid template: nothing added

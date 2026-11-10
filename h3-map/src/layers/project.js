@@ -1,8 +1,8 @@
 // Serialisation of the layer tree: versioned project JSON, migrations and validation.
 // Pure functions: no React, no stores. Used for localStorage auto-save and for import/export.
 //
-// Project file (schemaVersion 2):
-//   { format: 'h3map.project', schemaVersion: 2, savedAt: ISO string, layers: Node[], sources: SourceRef[] }
+// Project file (schemaVersion 3):
+//   { format: 'h3map.project', schemaVersion: 3, savedAt: ISO string, layers: Node[], sources: SourceRef[] }
 // where Node is a layer config or a group (see tree.js) and SourceRef is the small reference to a
 // user-loaded data source (URL, or file name + columns; see data/userSources.js). The data of loaded
 // files is never part of a project: file layers come back asking for the file again.
@@ -11,14 +11,17 @@
 //   0  flat array of layer configs without `kind` (Phase 1-2 layer list)
 //   1  layer tree with groups; every node has `kind`
 //   2  `sources` list (user GeoJSON/CSV references); layers of sourceless types (xyz, wms) have `sourceId: null`
+//   3  `sources` may also hold database references (kind 'postgis': connection id, schema, table, strategy, columns) and
+//      public MVT URLs (kind 'mvt'); layer types `mvt` and `h3cells`. A reference never contains a token, password,
+//      host or tile-session id: only ids and names. A v2 project needs no change except the version stamp.
 import { getSource } from '../data/sources.js'
 import { restoreSourceRefs, sourceRefsFor } from '../data/userSources.js'
 import { createId } from '../lib/ids.js'
-import { getLayerType } from './registry.js'
+import { acceptsSource, getLayerType } from './registry.js'
 import { MAX_DEPTH } from './tree.js'
 
 export const PROJECT_FORMAT = 'h3map.project'
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 const clamp01 = (v, fallback = 1) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : fallback)
 const str = (v, fallback) => (typeof v === 'string' && v.trim() ? v.trim() : fallback)
@@ -90,7 +93,7 @@ export function sanitizeTree(nodes) {
           problems.push(`Layer "${n.name ?? n.id}" uses unknown data source "${n.sourceId}"`)
           continue
         }
-        if (!type.geometry.includes(source.geometry)) {
+        if (!acceptsSource(type, source)) {
           problems.push(`Layer "${n.name ?? n.id}": ${type.label} cannot draw ${source.geometry} data`)
           continue
         }

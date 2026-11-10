@@ -7,6 +7,7 @@ import {
 import { isGroup, layerIdsOf, locate } from '../layers/tree.js'
 import { getSource } from '../data/sources.js'
 import { runParse } from '../data/loaders/client.js'
+import { createMvtUrlSource, createPgSource } from '../data/pgSources.js'
 import { createUserSource, setSourceData } from '../data/userSources.js'
 import { unionBounds } from '../lib/geo.js'
 import { zoomToBounds } from '../map/mapActions.js'
@@ -92,6 +93,37 @@ export function addParsedDataLayer({ input, result, typeId, name }) {
   const bounds = useDataStore.getState().entries[source.id]?.bounds
   if (bounds) zoomToBounds(bounds)
   return layer
+}
+
+/**
+ * Add a layer for a database table (from the add-to-map dialog): registers the source, adds the layer on top and zooms
+ * to the table's extent. Data loads through the data store (viewport sources wait for the map to settle).
+ * @param {{input: object, typeId: string, name?: string}} args input is a createPgSource() input (see data/pgPlan.js)
+ */
+export function addDatabaseLayer({ input, typeId, name }) {
+  const source = createPgSource(input)
+  const layer = useLayersStore.getState().addLayer(typeId, source.id, name?.trim() ? { name: name.trim() } : undefined)
+  useUiStore.getState().openLeftTab('layers')
+  if (source.bounds) zoomToBounds(source.bounds)
+  return layer
+}
+
+/** Add a layer for a public MVT URL. Throws with a readable message for an unusable URL. */
+export function addMvtUrlLayer({ name, url, sourceLayer, minzoom, maxzoom, geometry }) {
+  const source = createMvtUrlSource({ name, url, sourceLayer, minzoom, maxzoom, geometry })
+  const layer = useLayersStore.getState().addLayer('mvt', source.id, name?.trim() ? { name: name.trim() } : undefined)
+  useUiStore.getState().openLeftTab('layers')
+  return layer
+}
+
+/** Replace the strategy of a database layer with vector tiles (the "truncated" banner offers this). */
+export function switchLayerToTiles(layerId) {
+  const layer = useLayersStore.getState().layers.find((l) => l.id === layerId)
+  const source = layer && getSource(layer.sourceId)
+  if (!source || source.kind !== 'postgis') return false
+  const next = createPgSource({ ...source, strategy: 'mvt', geometry: source.geometry === 'h3' ? 'mixed' : source.geometry })
+  useLayersStore.getState().retargetLayer(layerId, 'mvt', next.id)
+  return true
 }
 
 /** Add a web-map layer (XYZ / WMS): no data source, the service is described by the style. */

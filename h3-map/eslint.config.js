@@ -5,7 +5,8 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // backend/ holds a Python venv whose bundled JS files are not ours; e2e/out has screenshots only
+  globalIgnores(['dist', 'backend', 'e2e/out']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [

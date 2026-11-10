@@ -1,0 +1,19 @@
+# Throwaway PostGIS for the database e2e tests (e2e/stack.mjs, e2e/README.md). Separate from any development database:
+# its own container, volume and port (127.0.0.1:55432), and a password that only protects this disposable container.
+# E2E_POSTGIS_IMAGE can point at any image with PostGIS (and optionally the h3 extension).
+services:
+  postgis:
+    image: ${E2E_POSTGIS_IMAGE:-postgis/postgis:17-3.5}
+    container_name: h3map-e2e-postgis
+    environment:
+      POSTGRES_PASSWORD: ${E2E_PG_ADMIN_PASSWORD:-e2e-throwaway}
+      POSTGRES_DB: postgres
+    ports:
+      - "127.0.0.1:55432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 30

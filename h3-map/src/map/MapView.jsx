@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AttributionControl, Map } from 'react-map-gl/maplibre'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import './maplibreSetup.js'
+import { normalizeViewBbox } from '../lib/viewBbox.js'
 import { notify } from '../state/notifyStore.js'
 import { useMapStore } from '../state/mapStore.js'
 import { useUiStore } from '../state/uiStore.js'
@@ -18,6 +19,15 @@ export default function MapView() {
   const setViewState = useMapStore((s) => s.setViewState)
   const setCursor = useMapStore((s) => s.setCursor)
   const setMapStatus = useMapStore((s) => s.setMapStatus)
+  const setSettled = useMapStore((s) => s.setSettled)
+  // Publish the viewport once the camera stops (and once after load): viewport sources debounce on top of this.
+  const publishView = useCallback(
+    (e) => {
+      const bbox = normalizeViewBbox(e.target.getBounds().toArray().flat())
+      if (bbox) setSettled({ bbox, zoom: e.target.getZoom() })
+    },
+    [setSettled],
+  )
   const basemapId = useUiStore((s) => s.basemapId)
   const { layers, getTooltip, onClick } = useDeckLayers()
 
@@ -60,7 +70,11 @@ export default function MapView() {
       onMove={(e) => setViewState(e.viewState)}
       onMouseMove={onMouseMove}
       onMouseOut={() => setCursor(null)}
-      onLoad={() => setMapStatus('ready')}
+      onMoveEnd={publishView}
+      onLoad={(e) => {
+        setMapStatus('ready')
+        publishView(e)
+      }}
       onError={onError}
       mapStyle={basemap.style}
       minZoom={1}

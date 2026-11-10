@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { buildDeckLayers, getLayerType } from '../layers/index.js'
 import { buildH3OverlayLayers } from '../layers/h3Overlays.js'
+import { propertyRows } from '../layers/common.js'
 import { effectiveLayers } from '../layers/tree.js'
+import { describeError, isAbort } from '../api/index.js'
+import { getSource } from '../data/sources.js'
 import { zoomToH3Resolution } from '../h3/h3Utils.js'
 import { escapeHtml } from '../lib/format.js'
 import { useDataStore } from '../state/dataStore.js'
@@ -12,6 +15,7 @@ import { useRuntimeStore } from '../state/runtimeStore.js'
 import { useSelectionStore } from '../state/selectionStore.js'
 import { useUiStore } from '../state/uiStore.js'
 import { useComputed } from './useComputed.js'
+import { useViewportSources } from './useViewportSources.js'
 
 /** Tile / image load failures from raster layers: one toast per layer (de-duplicated by key). */
 function reportLayerError(layerId, message) {
@@ -36,6 +40,8 @@ export function useDeckLayers() {
   const autoResolution = useMapStore((s) => zoomToH3Resolution(s.viewState.zoom, s.viewState.latitude))
   // Background work of layer types (H3 aggregation in a worker): layerId -> {id, value, pending, error}
   const computed = useComputed(drawn, entries, { autoResolution })
+  // Database layers that follow the viewport (bbox features, H3 cells) request their data when the map stops moving.
+  useViewportSources(drawn, { autoResolution })
 
   // Ensure data for every layer is requested (idempotent).
   useEffect(() => {
@@ -126,6 +132,22 @@ export function useDeckLayers() {
     return () => window.removeEventListener('pointerdown', remember, true)
   }, [])
 
+  // Tiles only carry the columns chosen for the tile session: a click fetches the full feature by id.
+  const featureRequest = useRef(null)
+  const loadFullFeature = useCallback((config, source, id) => {
+    featureRequest.current?.abort()
+    const controller = new AbortController()
+    featureRequest.current = controller
+    const still = () => {
+      const cur = useSelectionStore.getState().selected
+      return !controller.signal.aborted && cur?.layerId === config.id && cur.detail?.featureId === id
+    }
+    source.fetchFeature(id, { signal: controller.signal }).then(
+      (feature) => still() && useSelectionStore.getState().patchDetail({ loading: false, error: null, sections: [{ title: 'Attributes', rows: propertyRows(feature?.properties ?? {}, 200) }] }),
+      (error) => !isAbort(error) && still() && useSelectionStore.getState().patchDetail({ loading: false, error: describeError(error) }),
+    )
+  }, [])
+
   const onClick = useCallback((info) => {
     const { select, clear } = useSelectionStore.getState()
     const config = info.layer && useLayersStore.getState().layers.find((l) => l.id === info.layer.id)
@@ -135,7 +157,10 @@ export function useDeckLayers() {
     }
     const type = getLayerType(config.type)
     try {
-      const detail = type.describe(info.object, config, preparedRef.current[config.id])
+      let detail = type.describe(info.object, config, preparedRef.current[config.id])
+      const source = getSource(config.sourceId)
+      const fetchFull = detail.kind === 'tile-feature' && detail.featureId != null && !!source?.fetchFeature
+      if (fetchFull) detail = { ...detail, loading: true }
       const sel = { layerId: config.id, detail, h3: detail.h3, resolution: detail.resolution, coordinate: info.coordinate, value: info.object.value, count: info.object.count }
       // Shift-click adds / removes H3 cells; a plain click replaces the selection.
       if (shiftRef.current && detail.h3) useSelectionStore.getState().toggleCell(sel)
@@ -143,10 +168,11 @@ export function useDeckLayers() {
       useLayersStore.getState().setActive(config.id)
       useUiStore.getState().setRightOpen(true)
       useUiStore.getState().setRightTab('inspector')
+      if (fetchFull) loadFullFeature(config, source, detail.featureId)
     } catch (error) {
       notify(`Could not inspect feature: ${error.message}`, { kind: 'error' })
     }
-  }, [])
+  }, [loadFullFeature])
 
   return { layers: deckLayers, getTooltip, onClick }
 }

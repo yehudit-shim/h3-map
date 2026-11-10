@@ -1,8 +1,9 @@
-import { Database, Hexagon, Layers as LayersIcon, MousePointerClick, SlidersHorizontal } from 'lucide-react'
+import { Database, DatabaseZap, Hexagon, Layers as LayersIcon, MousePointerClick, SlidersHorizontal } from 'lucide-react'
 import { cn } from '../lib/cn.js'
 import { useUiStore } from '../state/uiStore.js'
 import ErrorBoundary from '../app/ErrorBoundary.jsx'
 import DataPanel from './DataPanel.jsx'
+import DatabasePanel from './db/DatabasePanel.jsx'
 import H3Panel from './H3Panel.jsx'
 import Inspector from './Inspector.jsx'
 import LayerManager from './LayerManager.jsx'
@@ -45,6 +46,7 @@ function PanelBody({ id, children, name }) {
 const LEFT_TABS = [
   { id: 'layers', label: 'Layers', icon: LayersIcon },
   { id: 'data', label: 'Data', icon: Database },
+  { id: 'database', label: 'DB', icon: DatabaseZap },
   { id: 'h3', label: 'H3', icon: Hexagon },
 ]
 const RIGHT_TABS = [
@@ -66,6 +68,7 @@ export function LeftSidebar() {
       <PanelBody id={tab} name={tab}>
         {tab === 'layers' && <LayerManager />}
         {tab === 'data' && <DataPanel />}
+        {tab === 'database' && <DatabasePanel />}
         {tab === 'h3' && <H3Panel />}
       </PanelBody>
     </aside>

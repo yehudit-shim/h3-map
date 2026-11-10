@@ -28,6 +28,22 @@ export const useUiStore = create(
       addLayerDialog: null,
       openAddLayer: (opts = {}) => set({ addLayerDialog: { tab: opts.tab ?? 'sample', file: opts.file ?? null } }),
       closeAddLayer: () => set({ addLayerDialog: null }),
+      /** Database browser dialogs. All hold references (ids, names) only: never credentials. Not persisted. */
+      loginOpen: false,
+      openLogin: () => set({ loginOpen: true }),
+      closeLogin: () => set({ loginOpen: false }),
+      /** Table detail drawer: null or {connectionId, schema, table}. */
+      tableDrawer: null,
+      openTable: (tableDrawer) => set({ tableDrawer }),
+      closeTable: () => set({ tableDrawer: null }),
+      /** Add-to-map dialog: null or {connectionId, schema, table}. */
+      addToMap: null,
+      openAddToMap: (addToMap) => set({ addToMap }),
+      closeAddToMap: () => set({ addToMap: null }),
+      /** Connection editor (admin): null or {connection?} (no connection = create). */
+      connectionDialog: null,
+      openConnectionDialog: (connection = null) => set({ connectionDialog: { connection } }),
+      closeConnectionDialog: () => set({ connectionDialog: null }),
       /** Show the Style tab of the right panel (closing the left one on narrow screens). */
       openStyle: () => set((s) => ({ rightTab: 'style', rightOpen: true, leftOpen: isNarrow() ? false : s.leftOpen })),
     }),

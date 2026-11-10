@@ -13,6 +13,9 @@ export const INITIAL_VIEW_STATE = {
 export const useMapStore = create((set) => ({
   viewState: INITIAL_VIEW_STATE,
   setViewState: (viewState) => set({ viewState }),
+  /** The view once the camera stopped moving: {bbox:[w,s,e,n], zoom}. Viewport-driven sources request data for it. */
+  settled: null,
+  setSettled: (settled) => set({ settled }),
   cursor: null, // {lon, lat} while the pointer is over the map
   setCursor: (cursor) => set({ cursor }),
   mapStatus: 'loading', // 'loading' | 'ready'

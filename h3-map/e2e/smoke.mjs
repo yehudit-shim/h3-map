@@ -1,10 +1,15 @@
 // End-to-end smoke test against the running app (system Chrome via playwright-core).
 //   BASE_URL=http://localhost:5173 CHROME_PATH=/usr/bin/google-chrome node e2e/smoke.mjs
+// With E2E_DB=1 the database scenario (e2e/db-scenario.mjs) runs too, against the stack from `node e2e/stack.mjs up`
+// (see e2e/README.md); BASE_URL then defaults to the stack's dev server.
 // Screenshots are written to e2e/out/ (git-ignored).
 import { chromium } from 'playwright-core'
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
+import { runDatabaseScenario } from './db-scenario.mjs'
 
-const BASE = process.env.BASE_URL ?? 'http://localhost:5173'
+const DB = process.env.E2E_DB === '1'
+const stackFile = new URL('./out/stack.json', import.meta.url)
+const BASE = process.env.BASE_URL ?? (DB && existsSync(stackFile) ? JSON.parse(readFileSync(stackFile, 'utf8')).baseUrl : 'http://localhost:5173')
 const CANDIDATES = [
   process.env.CHROME_PATH,
   '/usr/bin/google-chrome',
@@ -459,6 +464,17 @@ await page.waitForTimeout(500)
     }
   }
   // tidy: the CSV layer stays (later checks only need the original layers)
+}
+
+// 7f. Phase 6B: database browser, bbox / MVT / H3 layers against the real backend (needs the e2e stack)
+if (DB) {
+  await page.reload({ waitUntil: 'load' }) // a clean app: no layers from the checks above
+  await page.evaluate(() => localStorage.removeItem('h3map.layers'))
+  await page.reload({ waitUntil: 'load' })
+  await page.getByTestId('status-zoom').waitFor()
+  await runDatabaseScenario({ page, check, base: BASE })
+} else {
+  console.log('SKIP  database scenario (E2E_DB=1 with the stack from `node e2e/stack.mjs up`; see e2e/README.md)')
 }
 
 // 8. basemap switch + theme

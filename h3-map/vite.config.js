@@ -10,6 +10,11 @@ export default defineConfig({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   server: {
+    // The browser only talks to the FastAPI backend, same-origin through this proxy (no CORS needed in development).
+    // VITE_API_PROXY overrides the target, e.g. when the backend runs on another port or inside a container.
+    proxy: {
+      '/api': { target: globalThis.process?.env?.VITE_API_PROXY ?? 'http://localhost:8000', changeOrigin: true },
+    },
     // WSL2: when the repo lives on /mnt/c file events are not delivered; set
     // CHOKIDAR_USEPOLLING=true to fall back to polling. Prefer keeping the repo
     // on the Linux filesystem (see docs/DEVELOPMENT_SETUP.md).
