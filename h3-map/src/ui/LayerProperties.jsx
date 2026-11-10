@@ -92,7 +92,10 @@ function LayerBody({ node, effective }) {
             ['Kind', source?.kind ?? '–'],
             ['Geometry', source?.geometry ?? '–'],
             ['Status', entry?.status ?? 'not loaded'],
-            entry?.featureCount != null && ['Features', formatNumber(entry.featureCount)],
+            source?.strategy && ['Strategy', source.strategy],
+            source?.kind === 'postgis' && ['Table', `${source.schema}.${source.table}`],
+            entry?.truncated && ['Result', 'truncated by the server limit'],
+            entry?.featureCount != null && [entry.unit === 'cells' ? 'Cells' : 'Features', formatNumber(entry.featureCount)],
             info?.resolution != null && ['H3 resolution', String(info.resolution)],
             info?.cellCount != null && ['H3 cells', formatNumber(info.cellCount)],
           ]}

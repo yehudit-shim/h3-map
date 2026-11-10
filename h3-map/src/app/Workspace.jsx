@@ -7,6 +7,11 @@ import { notify } from '../state/notifyStore.js'
 import { useSelectionStore } from '../state/selectionStore.js'
 import { useUiStore } from '../state/uiStore.js'
 import AddLayerDialog from '../ui/AddLayerDialog.jsx'
+import DataNotices from '../ui/DataNotices.jsx'
+import AddToMapDialog from '../ui/db/AddToMapDialog.jsx'
+import ConnectionDialog from '../ui/db/ConnectionDialog.jsx'
+import LoginDialog from '../ui/db/LoginDialog.jsx'
+import TableDrawer from '../ui/db/TableDrawer.jsx'
 import { tabForFile } from '../ui/addLayer/names.js'
 import Attribution from '../ui/Attribution.jsx'
 import LayerProperties from '../ui/LayerProperties.jsx'
@@ -59,7 +64,7 @@ export default function Workspace() {
       const ui = useUiStore.getState()
       if (e.key === '[') ui.setLeftOpen(!ui.leftOpen)
       if (e.key === ']') ui.setRightOpen(!ui.rightOpen)
-      if (e.key === 'Escape' && !e.defaultPrevented && !ui.propertiesId && !ui.addLayerDialog) useSelectionStore.getState().clear()
+      if (e.key === 'Escape' && !e.defaultPrevented && !ui.propertiesId && !ui.addLayerDialog && !ui.loginOpen && !ui.tableDrawer && !ui.addToMap && !ui.connectionDialog) useSelectionStore.getState().clear()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -99,6 +104,7 @@ export default function Workspace() {
               <Spinner /> Loading map…
             </div>
           )}
+          <DataNotices />
           <LeftSidebar />
           <RightSidebar />
           <div className="absolute bottom-8 z-10 transition-[left] duration-150" style={{ left: leftInset }}>
@@ -119,6 +125,10 @@ export default function Workspace() {
         </main>
         <LayerProperties />
         <AddLayerDialog />
+        <LoginDialog />
+        <TableDrawer />
+        <AddToMapDialog />
+        <ConnectionDialog />
         <StatusBar />
       </div>
     </MapProvider>

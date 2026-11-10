@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { cellToLatLng, getResolution } from 'h3-js'
-import { Check, Database, Hexagon, Layers as LayersIcon, Map as MapIcon, Moon, PanelLeft, PanelRight, Search, Sun } from 'lucide-react'
+import { Check, Database, Hexagon, Layers as LayersIcon, LogIn, LogOut, Map as MapIcon, Moon, PanelLeft, PanelRight, Search, Sun, User } from 'lucide-react'
 import { BASEMAPS } from '../map/basemaps.js'
 import { flyToView } from '../map/mapActions.js'
 import { parseSearch } from '../lib/searchParse.js'
 import { cn } from '../lib/cn.js'
+import { useAuthStore } from '../state/authStore.js'
 import { notify } from '../state/notifyStore.js'
 import { useUiStore } from '../state/uiStore.js'
 import { Button, IconButton } from './Button.jsx'
@@ -51,6 +52,56 @@ function BasemapMenu() {
               {b.id === basemapId && <Check size={14} className="text-accent" aria-hidden="true" />}
             </button>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Sign in / account menu. The sample workspace works without signing in; databases need it. */
+function AccountMenu() {
+  const status = useAuthStore((s) => s.status)
+  const user = useAuthStore((s) => s.user)
+  const roles = useAuthStore((s) => s.roles)
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e) => !ref.current?.contains(e.target) && setOpen(false)
+    const onKey = (e) => e.key === 'Escape' && setOpen(false)
+    document.addEventListener('pointerdown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+  if (status !== 'signed-in') {
+    return (
+      <Button variant="outline" onClick={() => useUiStore.getState().openLogin()} data-testid="sign-in-button">
+        <LogIn size={14} aria-hidden="true" /> <span className="max-sm:hidden">Sign in</span>
+      </Button>
+    )
+  }
+  return (
+    <div ref={ref} className="relative">
+      <Button variant="outline" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open} aria-label={`Account: ${user}`} data-testid="account-button">
+        <User size={14} aria-hidden="true" /> <span className="max-w-24 truncate max-sm:hidden">{user}</span>
+      </Button>
+      {open && (
+        <div role="menu" aria-label="Account" className="absolute right-0 top-10 z-40 w-52 rounded-lg border border-line bg-panel p-1.5 shadow-float">
+          <div className="px-2 py-1.5 text-[12px]"><div className="font-medium">{user}</div><div className="text-muted">{roles.join(', ') || 'no role'}</div></div>
+          <button
+            role="menuitem"
+            data-testid="sign-out"
+            className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-hover"
+            onClick={() => {
+              setOpen(false)
+              useAuthStore.getState().logout()
+            }}
+          >
+            <LogOut size={14} aria-hidden="true" /> Sign out
+          </button>
         </div>
       )}
     </div>
@@ -105,6 +156,7 @@ export default function Toolbar() {
         <Database size={14} aria-hidden="true" /> Add layer
       </Button>
       <div className="ml-auto flex items-center gap-1">
+        <AccountMenu />
         <IconButton label="Open layers" icon={LayersIcon} className="max-md:hidden" onClick={() => ui().openLeftTab('layers')} />
         <IconButton label={theme === 'dark' ? 'Switch to light interface' : 'Switch to dark interface'} icon={theme === 'dark' ? Sun : Moon} onClick={() => ui().setTheme(theme === 'dark' ? 'light' : 'dark')} />
         <IconButton label={rightOpen ? 'Hide right panel' : 'Show right panel'} icon={PanelRight} active={rightOpen} className={cn(rightOpen && 'text-accent')} onClick={() => ui().setRightOpen(!rightOpen)} />

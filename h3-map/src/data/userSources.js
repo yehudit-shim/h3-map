@@ -7,6 +7,7 @@
 import { runParse, checkUrl } from './loaders/client.js'
 import { registerSource, getSource, unregisterSource, dataSources } from './sources.js'
 import { createId } from '../lib/ids.js'
+import { isTileOrPgSource, pgRefProblem, pgSourceRef, prunePgSources, restorePgRef } from './pgSources.js'
 
 const GEOMETRIES = ['point', 'line', 'polygon', 'mixed']
 const FORMATS = ['geojson', 'csv']
@@ -93,10 +94,10 @@ export function sourceRef(source) {
   return ref
 }
 
-/** References for the user sources used by a list of layer configs. */
+/** References for the saved (non-sample) sources used by layer configs: files, URLs, database tables, MVT URLs. */
 export function sourceRefsFor(layers) {
   const ids = new Set(layers.map((l) => l.sourceId))
-  return dataSources.filter((s) => isUserSource(s) && ids.has(s.id)).map(sourceRef)
+  return dataSources.filter((s) => ids.has(s.id)).flatMap((s) => (isUserSource(s) ? [sourceRef(s)] : isTileOrPgSource(s) ? [pgSourceRef(s)] : []))
 }
 
 const str = (v) => typeof v === 'string' && v.trim() !== ''
@@ -121,6 +122,12 @@ function refProblem(r) {
 export function restoreSourceRefs(refs) {
   const problems = []
   for (const r of Array.isArray(refs) ? refs : []) {
+    if (r?.kind === 'postgis' || r?.kind === 'mvt') {
+      const p = pgRefProblem(r)
+      if (p) problems.push(`Skipped a saved database source (${p})`)
+      else restorePgRef(r)
+      continue
+    }
     const problem = refProblem(r)
     if (problem) {
       problems.push(`Skipped a saved data source (${problem})`)
@@ -153,5 +160,5 @@ export function pruneUserSources(usedIds) {
     unregisterSource(id)
     memory.delete(id)
   }
-  return removed
+  return [...removed, ...prunePgSources(usedIds)]
 }

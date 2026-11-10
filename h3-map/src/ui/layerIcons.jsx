@@ -1,4 +1,4 @@
-import { Flame, Globe, Hexagon, MapPin, Spline, Shapes, Braces, ScatterChart, Grid3x3 } from 'lucide-react'
+import { Flame, Globe, Hexagon, MapPin, Spline, Shapes, Braces, ScatterChart, Grid3x3, Layers } from 'lucide-react'
 
 const ICONS = {
   point: MapPin,
@@ -10,6 +10,7 @@ const ICONS = {
   h3: Hexagon,
   geojson: Braces,
   raster: Globe,
+  mvt: Layers,
 }
 
 export function LayerTypeIcon({ icon, size = 15, className }) {

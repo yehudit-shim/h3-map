@@ -93,6 +93,13 @@ export const useLayersStore = create(
           commit(tree, { activeId: copy.id, selectedIds: [copy.id] })
           return copy
         },
+        /** Point a layer at another source and layer type (e.g. GeoJSON -> vector tiles); the style restarts from the new type's defaults. */
+        retargetLayer: (id, typeId, sourceId) => {
+          const next = createLayerConfig(typeId, sourceId)
+          forgetLayer(id)
+          patch(id, (n) => (T.isLayer(n) ? { ...n, type: typeId, sourceId, style: next.style } : n))
+          pruneSources(get().tree)
+        },
         renameNode: (id, name) => {
           const trimmed = String(name ?? '').trim()
           if (!trimmed) return

@@ -58,11 +58,11 @@ describe('project schema 2: user sources and web layers', () => {
 
   afterEach(() => pruneUserSources([]))
 
-  it('is version 2 and migrates v1 projects (no sources) unchanged', () => {
-    expect(SCHEMA_VERSION).toBe(2)
+  it('is version 3 and migrates v1 projects (no sources) unchanged', () => {
+    expect(SCHEMA_VERSION).toBe(3)
     const layer = createLayerConfig('point', 'sample-pois')
     const m = migrateProject({ format: PROJECT_FORMAT, schemaVersion: 1, layers: [layer] })
-    expect(m.schemaVersion).toBe(2)
+    expect(m.schemaVersion).toBe(3)
     expect(m.sources).toEqual([])
     expect(readProject({ schemaVersion: 1, layers: [layer] }).tree).toEqual([layer])
   })

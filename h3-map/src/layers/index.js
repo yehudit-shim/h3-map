@@ -8,10 +8,12 @@ import heatmap from './types/heatmap.js'
 import hexagon from './types/hexagon.js'
 import h3 from './types/h3.js'
 import geojson from './types/geojson.js'
+import mvt from './types/mvt.js'
+import h3cells from './types/h3cells.js'
 import xyz from './types/xyz.js'
 import wms from './types/wms.js'
 
-const BUILTIN = [point, line, polygon, scatterplot, heatmap, hexagon, h3, geojson, xyz, wms]
+const BUILTIN = [point, line, polygon, scatterplot, heatmap, hexagon, h3, geojson, mvt, h3cells, xyz, wms]
 
 for (const type of BUILTIN) {
   if (!getLayerType(type.id)) registerLayerType(type)

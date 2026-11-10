@@ -1,6 +1,6 @@
 import { getSource } from '../data/sources.js'
 import { createId } from '../lib/ids.js'
-import { getLayerType } from './registry.js'
+import { acceptsSource, getLayerType } from './registry.js'
 
 /**
  * Create a serialisable layer config. deck.gl Layer objects are derived from configs and never stored
@@ -13,7 +13,7 @@ export function createLayerConfig(typeId, sourceId, overrides = {}) {
   const source = type.sourceless ? undefined : getSource(sourceId)
   if (!type.sourceless) {
     if (!source) throw new Error(`Unknown data source "${sourceId}"`)
-    if (!type.geometry.includes(source.geometry)) {
+    if (!acceptsSource(type, source)) {
       throw new Error(`Layer type "${typeId}" cannot draw ${source.geometry} data`)
     }
   }

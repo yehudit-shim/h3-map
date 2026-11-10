@@ -7,6 +7,7 @@ import { IconButton } from './Button.jsx'
 import { SourceCard } from './DataPanel.jsx'
 import CsvTab from './addLayer/CsvTab.jsx'
 import GeoJsonTab from './addLayer/GeoJsonTab.jsx'
+import MvtTab from './addLayer/MvtTab.jsx'
 import RasterTab from './addLayer/RasterTab.jsx'
 
 const TABS = [
@@ -14,6 +15,7 @@ const TABS = [
   { id: 'geojson', label: 'GeoJSON' },
   { id: 'csv', label: 'CSV' },
   { id: 'web', label: 'XYZ / WMS' },
+  { id: 'mvt', label: 'MVT URL' },
 ]
 
 function SampleTab({ onDone }) {
@@ -75,6 +77,7 @@ export default function AddLayerDialog() {
           {tab === 'geojson' && <GeoJsonTab key={file?.name ?? 'g'} initialFile={file} onDone={close} />}
           {tab === 'csv' && <CsvTab key={file?.name ?? 'c'} initialFile={file} onDone={close} />}
           {tab === 'web' && <RasterTab onDone={close} />}
+          {tab === 'mvt' && <MvtTab onDone={close} />}
         </div>
       </div>
     </div>

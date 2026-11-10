@@ -14,6 +14,7 @@ import { useRuntimeStore } from '../state/runtimeStore.js'
 import { useUiStore } from '../state/uiStore.js'
 import { IconButton } from './Button.jsx'
 import { Slider } from './controls.jsx'
+import { ReconnectActions } from './DataNotices.jsx'
 import { EmptyState, Spinner } from './feedback.jsx'
 import { download, dropPosition, importLayersFile, nodeActions, nodeBounds, reloadSourceFile, zoomToNode } from './layerActions.js'
 import { LayerTypeIcon } from './layerIcons.jsx'
@@ -233,7 +234,7 @@ function NodeRow({ node, depth, index, count, parentVisible }) {
             )}
             {group && !renaming && <span className="shrink-0 rounded bg-raised px-1 font-mono text-[10px] text-muted" aria-label={`${layerCount} layers`}>{layerCount}</span>}
           </button>
-          {entry?.status === 'loading' && <Spinner label={`Loading ${node.name}`} />}
+          {(entry?.status === 'loading' || entry?.refreshing) && <Spinner label={`Loading ${node.name}`} />}
           {failed && <AlertTriangle size={14} className="shrink-0 text-danger" aria-label="Failed to load" />}
           <IconButton
             label={`More actions for ${node.name}`}
@@ -256,7 +257,7 @@ function NodeRow({ node, depth, index, count, parentVisible }) {
               ) : (
                 <>
                   {type?.label} · {source?.name ?? node.sourceId ?? 'web service'}
-                  {entry?.featureCount != null && ` · ${entry.featureCount.toLocaleString('en-US')} features`}
+                  {entry?.featureCount != null && ` · ${entry.featureCount.toLocaleString('en-US')} ${entry.unit ?? 'features'}${entry.truncated ? ' (truncated)' : ''}`}
                   {info?.resolution != null && ` · H3 res ${info.resolution} (${info.cellCount.toLocaleString('en-US')} cells)`}
                 </>
               )}
@@ -264,7 +265,7 @@ function NodeRow({ node, depth, index, count, parentVisible }) {
             {failed && (
               <div className="text-[12px] text-danger">
                 {entry.error}{' '}
-                {entry.needsFile ? <ReloadFileButton sourceId={node.sourceId} /> : <button type="button" className="cursor-pointer underline" onClick={() => useDataStore.getState().retry(node.sourceId)}>Retry</button>}
+                {entry.needsFile ? <ReloadFileButton sourceId={node.sourceId} /> : <ReconnectActions entry={entry} sourceId={node.sourceId} />}
               </div>
             )}
             <OpacityRow node={node} />

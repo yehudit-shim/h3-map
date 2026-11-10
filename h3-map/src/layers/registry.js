@@ -3,7 +3,9 @@
 // LayerType contract (see docs/SYSTEM_ARCHITECTURE.md §3.2):
 // {
 //   id, label, icon, description,
-//   geometry: ('point'|'line'|'polygon'|'mixed')[]   // source geometry classes this type can draw
+//   geometry: ('point'|'line'|'polygon'|'mixed'|'h3')[] // source geometry classes this type can draw
+//   dataKind?: 'features'|'tiles'|'h3cells'            // what the source's load() returns (default 'features' = GeoJSON)
+//   viewParams?(config, ctx) -> object                  // extra request parameters of dynamic (viewport) sources
 //   sourceless?: true                                   // web-map layers (XYZ, WMS): no data source, the service lives in `style`
 //   validate?(style) -> string|null                     // why a style cannot be drawn (checked when loading projects)
 //   attribution?(config) -> string|null                 // credit text shown on the map
@@ -44,10 +46,13 @@ export function listLayerTypes() {
 /** Layer types able to draw a given data source. */
 export function compatibleLayerTypes(source) {
   if (!source) return []
-  return listLayerTypes().filter((t) => t.geometry.includes(source.geometry))
+  return listLayerTypes().filter((t) => acceptsSource(t, source))
 }
 
 /** Test helper */
 export function _resetRegistry() {
   types.clear()
 }
+
+/** A type can draw a source when it understands what the source delivers (GeoJSON, tiles, H3 cells) and its geometry. */
+export const acceptsSource = (type, source) => !!source && (type.dataKind ?? 'features') === (source.dataKind ?? 'features') && type.geometry.includes(source.geometry)

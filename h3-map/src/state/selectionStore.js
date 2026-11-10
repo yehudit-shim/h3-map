@@ -35,6 +35,8 @@ export const useSelectionStore = create((set) => ({
       const primary = cells.at(-1)
       return { selected: { ...cur, cells, h3: primary.h3, detail: primary.detail, coordinate: sel.coordinate ?? cur.coordinate } }
     }),
+  /** Merge more detail into the selected feature (the full attributes that arrive after a tile click). */
+  patchDetail: (patch) => set((s) => (s.selected ? { selected: { ...s.selected, detail: { ...s.selected.detail, ...patch } } } : s)),
   setOverlay: (patch) => set((s) => ({ overlays: { ...s.overlays, ...patch } })),
   clear: () => set({ selected: null, overlays: DEFAULT_OVERLAYS }),
 }))

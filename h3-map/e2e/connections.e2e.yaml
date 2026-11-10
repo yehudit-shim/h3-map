@@ -1,0 +1,18 @@
+# Connection list of the e2e backend (H3MAP_CONNECTIONS_FILE). The read-only role is created by backend/scripts/seed/fixtures.py.
+connections:
+  - id: fixtures
+    name: E2E fixtures
+    host: localhost
+    port: 55432
+    database: h3map_e2e
+    username: h3map_test_reader
+    password_env: E2E_READER_PASSWORD
+    sslmode: disable
+  - id: perf
+    name: E2E large tables
+    host: localhost
+    port: 55432
+    database: h3map_perf
+    username: postgres
+    password_env: E2E_PG_ADMIN_PASSWORD
+    sslmode: disable

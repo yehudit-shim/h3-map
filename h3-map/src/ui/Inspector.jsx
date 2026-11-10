@@ -8,7 +8,7 @@ import { notify } from '../state/notifyStore.js'
 import { useSelectionStore } from '../state/selectionStore.js'
 import { IconButton } from './Button.jsx'
 import { Field, Select, Slider, Switch } from './controls.jsx'
-import { EmptyState, Section } from './feedback.jsx'
+import { EmptyState, Section, Spinner } from './feedback.jsx'
 
 const rgb = (c) => `rgb(${c[0]} ${c[1]} ${c[2]})`
 
@@ -120,6 +120,10 @@ export default function Inspector() {
         <IconButton label="Clear selection" icon={X} size={14} className="h-7 w-7" onClick={() => useSelectionStore.getState().clear()} />
       </div>
       {multi && <MultiSummary selected={selected} layer={layer} />}
+      {detail.loading && (
+        <div className="flex items-center gap-2 border-b border-line px-3 py-2 text-[12px] text-muted" role="status" data-testid="inspector-loading"><Spinner label="Loading attributes" /> Loading all attributes…</div>
+      )}
+      {detail.error && <div className="border-b border-line px-3 py-2 text-[12px] text-danger" role="alert">Could not load all attributes: {detail.error}</div>}
       {detail.sections.map((sec, i) => (
         <Section key={i} title={sec.title}>
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">

@@ -158,7 +158,8 @@ P1-01 → P2-01 → P3-01 → P6-01 → P6-03 → P6-05 → (P4-02, P5-02, P7-01
   - Tech: loaders.gl or `fetch`; `GeoJsonLayer`; all geometry types incl. GeometryCollection; large-file worker parse; CRS check (GeoJSON is 4326).
   - Deps: P3-01 · Critical · M
   - Acceptance: points, lines, polygons, multi and collections render; 50 MB file parses off the main thread.
-- [ ] **P4-02 · Vector layer from PostGIS (JSON/bbox strategy)** (MVP)
+- [x] **P4-02 · Vector layer from PostGIS (JSON/bbox strategy)** (MVP)
+  - **Implementation status:** `data/pgSources.js` (strategies `json` and `bbox`; a `dynamic` source's `load({bbox, zoom, limit, signal})` calls `/features` with `simplify=auto`). `map/useViewportSources.js` requests the viewport after `moveend` + 300 ms; `state/dataStore.js` aborts the previous request and discards a response that is no longer the latest, keeps the old data drawn while refreshing, and a failed refresh becomes a `viewError` notice. `truncated` shows a banner (`ui/DataNotices.jsx`) offering vector tiles. Layer types still receive plain GeoJSON. Verified by unit/component tests with MSW (api client, stale requests, add-to-map flow, project migration). NOT verified: `e2e/db-scenario.mjs` is written but was never run, and no browser check against a 1M-row table was done.
   - Tech: provider calling `/features` with viewport bbox, debounce, abort stale requests, `truncated` banner.
   - Deps: P6-05, P3-01 · Critical · L
   - Acceptance: panning reloads within a bbox; stale responses discarded; truncated banner appears when capped.
@@ -167,7 +168,8 @@ P1-01 → P2-01 → P3-01 → P6-01 → P6-03 → P6-05 → (P4-02, P5-02, P7-01
   - Tech: papaparse in worker, lat/lon column detection and manual pick, type inference.
   - Deps: P3-01 · High · M
   - Acceptance: bad rows reported; 500k rows load without freezing.
-- [ ] **P4-04 · MVT layer (external and backend)** (R2)
+- [x] **P4-04 · MVT layer (external and backend)** (R2)
+  - **Implementation status:** layer type `mvt` (`dataKind: 'tiles'`) with deck.gl `MVTLayer`; the data source supplies a tile descriptor and `getHeaders()`, so the bearer token goes through `loadOptions.fetch.headers` and never into the URL. A click shows the tile properties and then fetches `GET .../features/{id}` for all attributes. Public MVT URL = source kind `mvt` ("MVT URL" tab). The tile session is deleted when the layer is removed or on sign-out. Styling is a single colour (class breaks need server stats, P7-04). `binary` is left at deck's default; picking by feature id was not checked in a real browser. Verified by unit/component tests with MSW (api client, stale requests, add-to-map flow, project migration). NOT verified: `e2e/db-scenario.mjs` is written but was never run, and no browser check against a 1M-row table was done.
   - Tech: `MVTLayer`, auth headers via `loadOptions.fetch`, feature id for picking, `binary` option.
   - Deps: P6-07 · High · M · Acceptance: renders tiles from the backend and from a public MVT URL; picking works.
 - [x] **P4-05 · XYZ raster and WMS layers** (R2)
@@ -264,11 +266,12 @@ P1-01 → P2-01 → P3-01 → P6-01 → P6-03 → P6-05 → (P4-02, P5-02, P7-01
   - Tech: per API_SPECIFICATION.md §8; bigint→hex; `max_cells` coarsening; Arrow option later.
   - Deps: P6-04, P5-01 · Critical · L
   - Acceptance: parity tests (h3-py vs SQL vs h3-js) pass; 1M-cell table viewport < 500 ms.
-- [ ] **P6-09 · Frontend database browser and add-to-map flow** (MVP)
+- [x] **P6-09 · Frontend database browser and add-to-map flow** (MVP)
+  - **Implementation status:** `api/` (fetch wrapper, typed errors, AbortSignal), login dialog (token in memory only), `connectionsStore` (metadata only), "DB" tab with connection > schema > table tree, table drawer (overview, columns, indexes, paginated preview, warnings with the suggested `CREATE INDEX`), add-to-map dialog preselecting `recommendedStrategy` (3 clicks from a signed-in connection). H3 from the database: layer type `h3cells` fed by `/h3/cells` or `/h3/aggregate` with the auto resolution, plus a notice when the server returned a coarser resolution. Project schema 3. Verified by unit/component tests with MSW (api client, stale requests, add-to-map flow, project migration). NOT verified: `e2e/db-scenario.mjs` is written but was never run, and no browser check against a 1M-row table was done.
   - Tech: `api/` client, connection tree, table drawer (overview/columns/indexes/preview), add-to-map dialog.
   - Deps: P6-03, P6-04, P3-03 · Critical · L
   - Acceptance: from a clean DB connection to a rendered layer in ≤ 4 clicks; error and empty states.
-- [ ] **P6-10 · Connection management UI** (R2) · Medium · M · Deps: P6-02 · Acceptance: add/edit/test/delete (admin), secrets write-only.
+- [x] **P6-10 · Connection management UI** (R2) · Medium · M · Deps: P6-02 · Acceptance: add/edit/test/delete (admin), secrets write-only. Done (the backend supports user connections): `ui/db/ConnectionDialog.jsx`, shown to admins when `/config` reports `userConnections`; the password is write-only (empty = unchanged). Per-connection grants (`/grants`) have no UI yet.
 - [ ] **P6-11 · Server-side analysis endpoints** (R2) — buffer/intersection/union/clip/nearest/spatial-join, per API §9. Deps: P6-05 · High · L · Acceptance: results validated vs Shapely/Turf within tolerance; limits enforced.
 - [ ] **P6-12 · Uploads and export** (R2) — upload sniffing, export formats. Deps: P6-05 · Medium · L · Acceptance: round-trip GeoJSON/CSV/GPKG.
 - [ ] **P6-13 · Audit log and rate limiting** (R2) · Medium · M · Acceptance: every query logged with user/connection/duration; limits configurable.
