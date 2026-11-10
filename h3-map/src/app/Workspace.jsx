@@ -3,7 +3,9 @@ import { MapProvider } from 'react-map-gl/maplibre'
 import MapView from '../map/MapView.jsx'
 import MapRegistrar from '../map/MapRegistrar.jsx'
 import { useMapStore } from '../state/mapStore.js'
+import { useSelectionStore } from '../state/selectionStore.js'
 import { useUiStore } from '../state/uiStore.js'
+import LayerProperties from '../ui/LayerProperties.jsx'
 import Legend from '../ui/Legend.jsx'
 import MapControls from '../ui/MapControls.jsx'
 import StatusBar from '../ui/StatusBar.jsx'
@@ -32,13 +34,14 @@ export default function Workspace() {
     document.documentElement.dataset.theme = theme
   }, [theme])
 
-  // Keyboard: [ and ] toggle the sidebars (when not typing in a field)
+  // Keyboard: [ and ] toggle the sidebars, Escape clears the map selection (when not typing in a field)
   useEffect(() => {
     const onKey = (e) => {
       if (e.target instanceof HTMLElement && /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return
       const ui = useUiStore.getState()
       if (e.key === '[') ui.setLeftOpen(!ui.leftOpen)
       if (e.key === ']') ui.setRightOpen(!ui.rightOpen)
+      if (e.key === 'Escape' && !e.defaultPrevented && !ui.propertiesId) useSelectionStore.getState().clear()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -77,6 +80,7 @@ export default function Workspace() {
           </div>
           <Toaster />
         </main>
+        <LayerProperties />
         <StatusBar />
       </div>
     </MapProvider>

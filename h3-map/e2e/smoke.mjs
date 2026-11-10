@@ -67,11 +67,13 @@ check('deck.gl overlay canvas present', deckDrawn >= 1)
 // 4. click a hexagon: find a cell via scanning the map for the inspector to populate
 const box = await page.locator('main').boundingBox()
 let selected = false
+let hit = null
 outer: for (let y = box.y + 200; y < box.y + box.height - 100; y += 40) {
   for (let x = box.x + 380; x < box.x + box.width - 380; x += 40) {
     await page.mouse.click(x, y)
     if (await page.getByTestId('selected-h3-index').count()) {
       selected = true
+      hit = { x, y }
       break outer
     }
   }
@@ -85,6 +87,11 @@ if (selected) {
   // index resolution digit (hex char 2) must equal the displayed resolution
   check('index encodes the displayed resolution', parseInt(idx[1], 16) === Number(res))
   await page.screenshot({ path: 'e2e/out/02-selected.png' })
+  // Escape clears the selection; clicking again restores it
+  await page.keyboard.press('Escape')
+  check('Escape clears the selection', num(await page.getByTestId('status-selected').innerText()) === 0)
+  await page.mouse.click(hit.x, hit.y)
+  await page.getByTestId('selected-h3-index').waitFor({ timeout: 5000 })
 }
 
 // 5. resolution selector: H3 tab -> fixed -> change res
@@ -164,6 +171,64 @@ await page.waitForTimeout(2500)
 await page.screenshot({ path: 'e2e/out/04c-extruded.png' })
 check('extruded polygon style applied', (await page.getByRole('switch', { name: '3D extrusion' }).getAttribute('aria-checked')) === 'true')
 await page.getByLabel(/Reset north/).click()
+
+// 7c. Phase 3: groups, drag and drop, context menu, properties, persistence
+await page.getByRole('tab', { name: 'Layers' }).click()
+const layerRows = page.locator('[data-testid^=layer-row-]')
+const nameBtn = (text) => layerRows.filter({ hasText: text }).first().locator('[data-node-name]')
+await nameBtn('Lines · Routes').click()
+await nameBtn('Points · Points of interest').click({ modifiers: ['Control'] })
+await page.getByLabel('Group 2 selected').click()
+const groupRow = page.locator('[data-testid^=group-row-]').first()
+await groupRow.waitFor()
+check('Ctrl+click two layers and group them', (await groupRow.locator('[data-testid^=layer-row-]').count()) === 2)
+const visibleBefore = num(await page.getByTestId('status-layers').innerText())
+await page.getByLabel('Hide New group').click()
+const visibleAfter = num(await page.getByTestId('status-layers').innerText())
+check('hiding a group hides the layers inside it', visibleAfter === visibleBefore - 2, `${visibleBefore} -> ${visibleAfter}`)
+await page.getByLabel('Show New group').click()
+
+// real mouse drag: drop the H3 layer onto the group header (middle of the row = inside)
+const h3Row = layerRows.filter({ hasText: 'H3 · Event intensity' }).first()
+await h3Row.locator('> div').first().dragTo(groupRow.locator('> div').first())
+await page.waitForTimeout(300)
+check('drag and drop moves a layer into a group', (await groupRow.locator('[data-testid^=layer-row-]').count()) === 3)
+// drag a layer above the first row (top quarter of the target row = before)
+const firstBox = await page.locator('[data-testid^=group-row-], [data-testid^=layer-row-]').first().locator('> div').first().boundingBox()
+const lastLayer = layerRows.last()
+const lastName = (await lastLayer.locator('[data-node-name]').innerText()).trim()
+await lastLayer.locator('> div').first().dragTo(page.locator('[data-testid^=group-row-], [data-testid^=layer-row-]').first().locator('> div').first(), { targetPosition: { x: firstBox.width / 2, y: 3 } })
+await page.waitForTimeout(300)
+const topName = (await page.locator('[data-node-name]').first().innerText()).trim()
+check('drag and drop reorders to the top of the list', topName === lastName, `${lastName} -> top is ${topName}`)
+await page.screenshot({ path: 'e2e/out/04d-groups.png' })
+
+// context menu + properties dialog
+await nameBtn('Polygons · Districts').click({ button: 'right' })
+await page.getByRole('menuitem', { name: 'Properties…' }).click()
+const dialog = page.getByRole('dialog')
+await dialog.waitFor()
+const dialogText = await dialog.innerText()
+check('properties dialog shows source, extent and attributes', /Data source/i.test(dialogText) && /West/i.test(dialogText) && /Attributes/i.test(dialogText))
+await page.screenshot({ path: 'e2e/out/04e-properties.png' })
+await page.keyboard.press('Escape')
+check('Escape closes the properties dialog', (await page.getByRole('dialog').count()) === 0)
+
+// persistence: reload restores the tree, the groups and the styles
+const countBefore = await layerRows.count()
+// two layers share the name "Polygons · Districts": find the extruded one by id
+const extrudedId = await page.evaluate(() => {
+  const find = (nodes) => nodes.flatMap((n) => (n.kind === 'group' ? find(n.children) : [n]))
+  return find(JSON.parse(localStorage.getItem('h3map.layers')).state.tree).find((l) => l.type === 'polygon' && l.style.extruded)?.id
+})
+const savedNodes = await page.evaluate(() => JSON.parse(localStorage.getItem('h3map.layers')).state.tree.length)
+await page.reload({ waitUntil: 'load' })
+await page.locator('[data-testid^=group-row-]').first().waitFor({ timeout: 15000 })
+check('reload restores layers and groups', (await page.locator('[data-testid^=layer-row-]').count()) === countBefore && savedNodes > 0, `${countBefore} layers`)
+await page.locator(`[data-testid=layer-row-${extrudedId}] [data-node-name]`).click()
+await page.getByRole('tab', { name: 'Style' }).click()
+check('reload restores layer styles', (await page.getByRole('switch', { name: '3D extrusion' }).getAttribute('aria-checked')) === 'true')
+await page.waitForTimeout(1500)
 
 // 8. basemap switch + theme
 await page.getByRole('button', { name: /Basemap:/ }).click()

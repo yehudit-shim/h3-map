@@ -3,9 +3,9 @@
 Legend: **Priority** Critical / High / Medium / Low. **Complexity** S (≤½ day), M (1-2 days), L (3-5 days), XL (>1 week). **MVP** marks tasks in the first release.
 Task block format: `- [ ] ID · Title` followed by Description / Tech / Deps / Priority · Complexity / Acceptance.
 
-## Implementation status (updated after Phases 1-2)
+## Implementation status (updated after Phase 3)
 
-Phases 1 and 2 were implemented together with the parts of Phases 3, 5 and 7 needed to deliver an interactive map backed by sample data (no database). Tasks marked `[x]` are complete and verified (unit tests, a browser end-to-end run in dev and production builds). Tasks that are only partly done are left unchecked with a note. **Not started:** P1-06, P1-07, P1-09, P1-10, P2-05, P2-06, P2-07 and everything in Phases 6, 8 and 9, plus the remaining Phase 10 tasks. See `SYSTEM_ARCHITECTURE.md` §11 for architectural changes made during implementation.
+Phases 1 and 2 were implemented together with the parts of Phases 3, 5 and 7 needed to deliver an interactive map backed by sample data (no database). Tasks marked `[x]` are complete and verified (unit tests, a browser end-to-end run in dev and production builds). Tasks that are only partly done are left unchecked with a note. **Not started:** P1-06, P1-07, P1-09, P1-10, P2-05, P2-06, P2-07 and everything in Phases 6, 8 and 9, plus the remaining Phase 10 tasks. See `SYSTEM_ARCHITECTURE.md` §11 for architectural changes made during implementation. **Phase 3 (layer management) is complete**; the Phase 3 section lists the two items left for later (map-canvas context menu, server-side project storage).
 
 ## MVP definition
 
@@ -107,41 +107,45 @@ P1-01 → P2-01 → P3-01 → P6-01 → P6-03 → P6-05 → (P4-02, P5-02, P7-01
 
 ## Phase 3: Layer management
 
+**Status: complete**, except the map-canvas context menu and the backend part of P3-07, which needs Phase 6. Verified by 92 unit/component tests (58 before Phase 3) and the browser smoke test (36/36 checks on the dev build).
+
 - [x] **P3-01 · Layer type registry and factory** (MVP)
-  - **Implementation status:** `layers/registry.js` + `layers/layerFactory.js` + `layers/buildDeckLayers.js`; eight built-in layer types in `layers/types/`. Adding a type = one new file registered in `layers/index.js`; covered by a unit test.
+  - **Implementation status:** `layers/registry.js` + `layers/layerFactory.js` + `layers/buildDeckLayers.js`; eight built-in layer types in `layers/types/`. Adding a type = one new file registered in `layers/index.js`; covered by a unit test. Layer configs now carry `kind: 'layer'`.
   - Tech: `registerLayerType`, plugin contract from SYSTEM_ARCHITECTURE.md §3.2, JSON-Schema config validation, deck layer creation from configs with stable ids.
   - Deps: P2-02 · Critical · M
   - Acceptance: a new layer type can be added by adding one folder, with no change to `MapView`; unit tests for registry/factory.
 - [x] **P3-02 · Layers store and actions** (MVP)
-  - **Implementation status:** `state/layersStore.js`: add, remove, rename, duplicate, reorder, visibility, opacity, style update. Top of list is drawn on top.
+  - **Implementation status:** `state/layersStore.js` holds a layer **tree** (`tree`: layers and nested groups) as the single source of truth, plus a derived flat `layers` list (UI order, top first) that one `commit()` helper keeps in sync. Actions: add, remove (layer or group), duplicate (deep copy, fresh ids), rename, visibility, opacity, style update, move up/down, drag-drop move (`before`/`after`/`inside`/`end`), indent/outdent, group/ungroup, expand/collapse, multi-select. Pure tree operations live in `layers/tree.js`. Group visibility is ANDed and opacity multiplied down the tree (`effectiveLayers`); the map, legend and status bar use that. Undo is not implemented.
   - Tech: add/remove/rename/duplicate/reorder/visibility/opacity; undo-able; selectors.
   - Deps: P1-04, P3-01 · Critical · M
   - Acceptance: all actions unit tested; map order matches list order (top of list renders on top).
-- [ ] **P3-03 · Layer manager UI** (MVP)
-  - **Implementation status:** PARTIAL. Layer manager with visibility, opacity, rename (double click or button), duplicate, remove, move up/down buttons, load/error/retry states. Drag-and-drop reordering (dnd-kit) is not done.
+- [x] **P3-03 · Layer manager UI** (MVP)
+  - **Implementation status:** `ui/LayerManager.jsx` is a QGIS-style layer tree: a toolbar (add layer, new group / group selection, expand/collapse all, save/load menu), nested groups with layer counts, eye toggles (a child shows when a parent group hides it), opacity, inline rename (double click / F2), Ctrl/Cmd+click multi-select, and load/error/retry states. Reordering uses native HTML5 drag and drop instead of dnd-kit (no new dependency). It has drop indicators and a "move to bottom" drop zone, and refuses moves into a node's own subtree or deeper than 6 levels. Keyboard fallback: Alt+Up/Down reorder, Alt+Right moves into the group above, Alt+Left moves out of the group.
   - Tech: sortable list (dnd-kit, MIT), eye toggle, opacity slider, kebab menu, empty state.
   - Deps: P3-02, P1-03 · High · M
   - Acceptance: drag reorder with keyboard fallback; component tests pass.
-- [ ] **P3-04 · Zoom to layer and metadata dialog** (MVP)
-  - **Implementation status:** PARTIAL. Zoom-to-layer works from computed data bounds. The metadata dialog is not done (feature count and H3 resolution/cell count are shown inline in the layer row).
+- [x] **P3-04 · Zoom to layer and metadata dialog** (MVP)
+  - **Implementation status:** Zoom to a layer or a group (a group uses the union of its layers' data extents, `lib/geo.js#unionBounds`). `ui/LayerProperties.jsx` is a properties dialog: general info, effective visibility/opacity, group path, data source, feature count, H3 resolution/cells, attribute list, extent and the style JSON. For a group it shows the contents and the combined extent. Extents crossing the antimeridian are not handled specially yet (the sample data does not cross it). DB layers come with Phase 6.
   - Tech: layer extent from source metadata, `fitBounds`; metadata panel.
   - Deps: P3-02 · High · S
   - Acceptance: zoom works for file and DB layers; antimeridian-safe bounds.
 - [x] **P3-05 · Right panel shell: style and inspector tabs** (MVP)
-  - **Implementation status:** Right panel with Inspector and Style tabs; style form is generated from each layer type's `controls` schema (`ui/StylePanel.jsx`).
+  - **Implementation status:** Right panel with Inspector and Style tabs. The style form is generated from each layer type's `controls` schema (`ui/StylePanel.jsx`). Fill/line colors, line width, point size, polygon/H3 extrusion and attribute-based styling (numeric ramps with classification, categorical palettes) are all schema-driven. Phase 3 fixed a bug: `showIf` was called without the data source, so the numeric "Color by" controls (ramp, classification, classes, reverse) never appeared.
   - Tech: panel container, selection routing, schema-driven form renderer.
   - Deps: P3-03 · High · M
   - Acceptance: selecting a layer shows style form generated from its config schema.
 - [x] **P3-06 · Hover tooltips and click selection** (MVP)
-  - **Implementation status:** Hover tooltips (`getTooltip`) and click selection (`useDeckLayers.js`); Escape-to-clear is not implemented, click on empty map or the clear button clears the selection.
+  - **Implementation status:** Hover tooltips (`getTooltip`) and click selection (`useDeckLayers.js`). Escape clears the selection (`app/Workspace.jsx`), as do a click on empty map and the clear button. The Inspector shows which layer a feature belongs to. Removing a layer or group clears a selection that belongs to it.
   - Tech: deck `onHover`/`onClick`, `selectionStore`, highlight.
   - Deps: P3-01 · High · M
   - Acceptance: tooltip shows configured columns; click selects; Esc clears.
 - [ ] **P3-07 · Save/load layer configs and projects** (R2)
+  - **Implementation status:** PARTIAL (browser side done). The tree is auto-saved to localStorage (`h3map.layers`, zustand `persist`) and restored on reload. Export/import of a project JSON file (`{format: 'h3map.project', schemaVersion: 1, layers}`) goes through `layers/project.js`. It migrates schema 0 (the Phase 1-2 flat list), rejects newer versions, drops layers with unknown types or sources, fills missing style keys from the type defaults, clamps values and de-duplicates ids. If every saved layer is invalid, the current layers are kept. "Reset to default layers" is in the same menu. Not done: the server-side `/layers` and `/projects` APIs (they need the Phase 6 backend).
   - Tech: API `/layers`, `/projects`, localStorage draft, config `schema_version` migrations.
   - Deps: P6-01, P3-02 · Medium · M
   - Acceptance: reload restores layers; import/export project JSON.
-- [ ] **P3-08 · Context menu and layer groups** (R3)
+- [x] **P3-08 · Context menu and layer groups** (R3)
+  - **Implementation status:** Layer groups with nesting (max depth 6), collapse, and visibility/opacity that cascade to children. Every row has a right-click menu and a "More" button (`ui/Menu.jsx`, keyboard navigable), both built from one action list (`ui/layerActions.js`): show/hide, zoom, properties, edit style, rename, duplicate, move up/down/in/out, group, ungroup, remove. Not done: a context menu on the map canvas itself.
   - Deps: P3-03 · Low · M · Acceptance: context menu actions on map and layers; grouped layers collapse and toggle together.
 
 ## Phase 4: Standard GIS layers

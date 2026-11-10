@@ -79,7 +79,7 @@ export default function StylePanel() {
         <div className="text-[11px] text-muted">{type.label} · {source?.name}</div>
       </div>
       {groups.map((g) => {
-        const controls = type.controls.filter((c) => c.group === g && (!c.showIf || c.showIf(layer.style)))
+        const controls = type.controls.filter((c) => c.group === g && (!c.showIf || c.showIf(layer.style, source)))
         if (!controls.length) return null
         return (
           <Section key={g} title={titles[g]}>

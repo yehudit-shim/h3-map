@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-Phases 1-2 of `docs/DEVELOPMENT_ROADMAP.md` are implemented: a working MapLibre + deck.gl workspace with a layer manager, eight layer types and a real H3 demo, running on bundled sample data. There is no backend, database, Docker setup or CI yet (Phase 6 and later). `docs/` is the source of truth for design. `docs/SYSTEM_ARCHITECTURE.md` §11 lists where the implementation deliberately differs from the original design. The roadmap marks which tasks are done.
+Phases 1-3 of `docs/DEVELOPMENT_ROADMAP.md` are implemented: a working MapLibre + deck.gl workspace with a QGIS-style layer tree (groups, drag and drop, properties, save/load), eight layer types and a real H3 demo, running on bundled sample data. There is no backend, database, Docker setup or CI yet (Phase 6 and later). `docs/` is the source of truth for design. `docs/SYSTEM_ARCHITECTURE.md` §11 lists where the implementation deliberately differs from the original design. The roadmap marks which tasks are done.
 
 The git root is the parent directory (`anastasia/`), not `h3-map/`.
 
@@ -22,7 +22,9 @@ Run from `h3-map/`:
 Data flow: `LayerConfig` (plain JSON in `state/layersStore.js`) + loaded GeoJSON (`state/dataStore.js`, from the registry in `data/sources.js`) -> `layers/buildDeckLayers.js` -> deck.gl layers -> `map/DeckOverlay.jsx`. `map/useDeckLayers.js` is the only place the stores and the layer system meet. Do not import stores from `layers/` or sample data from layer types.
 
 - **Layer types are plugins** (`layers/types/*.js`, registered in `layers/index.js`). Each supplies `defaults`, `controls` (schema from which `ui/StylePanel.jsx` generates the form), `prepareKey`/`prepare` (expensive derived data, memoised per layer by `prepareKey`), `createDeckLayers`, `describe` (tooltip and inspector), `legend`. A new type needs no change to the map or UI. If a style input affects prepared data it must be part of `prepareKey`, and inputs to deck accessors must be in `updateTriggers`.
-- **Layer order**: index 0 of `layersStore.layers` is the top layer; `useDeckLayers` reverses it for deck.gl.
+- **Layer tree**: `layersStore.tree` (layers and nested groups; pure operations in `layers/tree.js`) is the source of truth. `layersStore.layers` is a derived flat list (top first) that the store's `commit()` always updates. Never `setState({ layers })` directly; use `setTree()`. Index 0 is the top. The map draws `effectiveLayers(tree)` (bottom first, group visibility ANDed and opacity multiplied). Use effective visibility, not `layer.visible`, for anything that shows what is drawn.
+- **Persistence**: the tree is auto-saved to localStorage (`h3map.layers`). Saved data and imported files go through `layers/project.js` (`schemaVersion` migrations + validation). Bump `SCHEMA_VERSION` and add a migration when the config shape changes.
+- **Layer actions** (context menu, "More" button) come from one list in `ui/layerActions.js`. Add actions there, not per layer type.
 - **Data sources** are the seam for PostGIS: a source has `fields` and `load()` returning GeoJSON. Layer types only know GeoJSON plus field metadata.
 - **H3**: `layers/types/h3.js` bins points with `h3/h3Utils.js` (h3-js v4) and renders with `H3HexagonLayer`. Resolution is "auto" (derived from zoom in `useDeckLayers`, which selects only the integer resolution to avoid re-rendering on every zoom frame) or "fixed". `layers/types/hexagon.js` is deck.gl's generic binning and is NOT H3; keep the two distinct in names and UI.
 - Selection (`state/selectionStore.js`) stores the `describe()` result captured at click time. An H3 selection is cleared when the layer's resolution changes.

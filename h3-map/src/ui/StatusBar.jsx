@@ -1,4 +1,5 @@
 import { formatCoord, formatScale } from '../lib/format.js'
+import { effectiveLayers } from '../layers/tree.js'
 import { useLayersStore } from '../state/layersStore.js'
 import { useMapStore } from '../state/mapStore.js'
 import { useSelectionStore } from '../state/selectionStore.js'
@@ -20,7 +21,7 @@ export default function StatusBar() {
   const pitch = useMapStore((s) => s.viewState.pitch)
   const bearing = useMapStore((s) => s.viewState.bearing)
   const selected = useSelectionStore((s) => (s.selected ? 1 : 0))
-  const layerCount = useLayersStore((s) => s.layers.filter((l) => l.visible).length)
+  const layerCount = useLayersStore((s) => effectiveLayers(s.tree).filter((l) => l.visible).length)
   return (
     <footer className="z-20 flex h-7 shrink-0 items-center gap-4 overflow-hidden border-t border-line bg-panel px-3 text-[11px]" role="status" aria-label="Map status">
       <Item label="Lon, Lat" testId="status-coords" className="min-w-[110px] sm:min-w-[170px]">
@@ -31,7 +32,7 @@ export default function StatusBar() {
       <Item label="CRS" testId="status-crs">EPSG:4326</Item>
       <Item label="View" className="max-md:hidden">{Math.round(bearing)}° / {Math.round(pitch)}°</Item>
       <div className="ml-auto flex items-center gap-4">
-        <Item label="Layers" className="max-sm:hidden">{layerCount}</Item>
+        <Item label="Layers" testId="status-layers" className="max-sm:hidden">{layerCount}</Item>
         <Item label="Selected" testId="status-selected">{selected}</Item>
       </div>
     </footer>

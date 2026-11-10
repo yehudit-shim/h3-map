@@ -18,3 +18,5 @@ for (const type of BUILTIN) {
 export { compatibleLayerTypes, getLayerType, listLayerTypes, registerLayerType } from './registry.js'
 export { buildDeckLayers, forgetLayer } from './buildDeckLayers.js'
 export { createLayerConfig } from './layerFactory.js'
+export * as tree from './tree.js'
+export { PROJECT_FORMAT, SCHEMA_VERSION, readProject, sanitizeTree, serializeProject } from './project.js'

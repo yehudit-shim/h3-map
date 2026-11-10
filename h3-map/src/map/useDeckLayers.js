@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { buildDeckLayers, getLayerType } from '../layers/index.js'
+import { effectiveLayers } from '../layers/tree.js'
 import { zoomToH3Resolution } from '../h3/h3Utils.js'
 import { escapeHtml } from '../lib/format.js'
 import { useDataStore } from '../state/dataStore.js'
@@ -16,7 +17,10 @@ import { useUiStore } from '../state/uiStore.js'
  * system meet; map components just receive `{layers, getTooltip, onClick}`.
  */
 export function useDeckLayers() {
+  const tree = useLayersStore((s) => s.tree)
   const configs = useLayersStore((s) => s.layers)
+  // Bottom first, with group visibility and opacity folded into every layer.
+  const drawn = useMemo(() => effectiveLayers(tree), [tree])
   const entries = useDataStore((s) => s.entries)
   const selected = useSelectionStore((s) => s.selected)
   // Primitive selector: only re-renders when the auto H3 resolution actually changes (not every zoom frame).
@@ -29,8 +33,8 @@ export function useDeckLayers() {
   }, [configs])
 
   const result = useMemo(
-    () => buildDeckLayers(configs.slice().reverse(), entries, { autoResolution, selection: selected }),
-    [configs, entries, autoResolution, selected],
+    () => buildDeckLayers(drawn, entries, { autoResolution, selection: selected }),
+    [drawn, entries, autoResolution, selected],
   )
   // Event handlers read the latest prepared data through a ref that is updated in an effect.
   const preparedRef = useRef(result.prepared)

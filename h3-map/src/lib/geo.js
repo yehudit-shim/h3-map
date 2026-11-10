@@ -105,3 +105,13 @@ export function numericExtent(items, accessor) {
   }
   return Number.isFinite(min) ? [min, max] : [0, 1]
 }
+
+/** Union of bounding boxes, ignoring nulls. Returns null when there is none. */
+export function unionBounds(list) {
+  let out = null
+  for (const b of list) {
+    if (!b) continue
+    out = out ? [Math.min(out[0], b[0]), Math.min(out[1], b[1]), Math.max(out[2], b[2]), Math.max(out[3], b[3])] : [...b]
+  }
+  return out
+}

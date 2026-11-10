@@ -1,5 +1,6 @@
 import { Copy, MousePointerClick, X } from 'lucide-react'
 import { formatCoord } from '../lib/format.js'
+import { useLayersStore } from '../state/layersStore.js'
 import { notify } from '../state/notifyStore.js'
 import { useSelectionStore } from '../state/selectionStore.js'
 import { IconButton } from './Button.jsx'
@@ -17,6 +18,7 @@ async function copy(text) {
 /** Selected feature / H3 cell details (docs/UI_UX_DESIGN.md §7). */
 export default function Inspector() {
   const selected = useSelectionStore((s) => s.selected)
+  const layerName = useLayersStore((s) => s.layers.find((l) => l.id === selected?.layerId)?.name)
   if (!selected) {
     return <EmptyState icon={MousePointerClick} title="Nothing selected">Click a feature or an H3 hexagon on the map to inspect it.</EmptyState>
   }
@@ -26,6 +28,7 @@ export default function Inspector() {
       <div className="flex items-start justify-between gap-2 border-b border-line px-3 py-2.5">
         <div className="min-w-0">
           <div className="truncate text-[14px] font-semibold" data-testid="inspector-title">{detail.title}</div>
+          {layerName && <div className="truncate text-[11px] text-muted" data-testid="inspector-layer">Layer: {layerName}</div>}
           {detail.h3 && (
             <div className="mt-0.5 flex items-center gap-1">
               <code className="rounded bg-raised px-1.5 py-0.5 font-mono text-[12px] text-accent" data-testid="selected-h3-index">{detail.h3}</code>

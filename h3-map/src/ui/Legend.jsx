@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { getLayerType } from '../layers/index.js'
 import { formatNumber } from '../lib/format.js'
+import { effectiveLayers } from '../layers/tree.js'
 import { useLayersStore } from '../state/layersStore.js'
 import { useRuntimeStore } from '../state/runtimeStore.js'
 import { rampGradientCss } from '../styling/colorRamps.js'
@@ -43,15 +44,16 @@ function LegendBody({ spec }) {
 
 /** Floating legend for every visible layer. Reuses the memoised prepared data of the layer factory. */
 export default function Legend() {
-  const layers = useLayersStore((s) => s.layers)
+  const tree = useLayersStore((s) => s.tree)
   const prepared = useRuntimeStore((s) => s.prepared)
   const items = useMemo(
     () =>
-      layers
+      effectiveLayers(tree)
+        .reverse() // top layer first, like the layer manager
         .filter((l) => l.visible && prepared[l.id])
         .map((l) => ({ layer: l, spec: getLayerType(l.type).legend?.(l, prepared[l.id]) }))
         .filter((x) => x.spec),
-    [layers, prepared],
+    [tree, prepared],
   )
   if (!items.length) return null
   return (

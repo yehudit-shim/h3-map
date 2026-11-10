@@ -20,6 +20,12 @@ export const useUiStore = create(
       setRightOpen: (rightOpen) => set((s) => ({ rightOpen, leftOpen: isNarrow() && rightOpen ? false : s.leftOpen })),
       openLeftTab: (leftTab) => set((s) => ({ leftTab, leftOpen: true, rightOpen: isNarrow() ? false : s.rightOpen })),
       setRightTab: (rightTab) => set({ rightTab }),
+      /** Node id whose properties (metadata) dialog is open, or null. Not persisted. */
+      propertiesId: null,
+      openProperties: (propertiesId) => set({ propertiesId }),
+      closeProperties: () => set({ propertiesId: null }),
+      /** Show the Style tab of the right panel (closing the left one on narrow screens). */
+      openStyle: () => set((s) => ({ rightTab: 'style', rightOpen: true, leftOpen: isNarrow() ? false : s.leftOpen })),
     }),
     {
       name: 'h3map.ui',

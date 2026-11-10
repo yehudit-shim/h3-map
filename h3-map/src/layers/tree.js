@@ -284,8 +284,11 @@ export function groupNodes(tree, ids, name = 'New group') {
   if (!top.length) return { tree, group: null }
   const group = createGroup(name, top)
   if (locate(tree, top[0].id).depth + subtreeHeight(group) >= MAX_DEPTH) return { tree, group: null }
-  let next = replaceNode(tree, top[0].id, [group])
+  // Detach the other nodes first: once they are inside the new group, removing them by id would
+  // also remove them from the group.
+  let next = tree
   for (const n of top.slice(1)) next = removeNode(next, n.id).tree
+  next = replaceNode(next, top[0].id, [group])
   return { tree: next, group }
 }
 
@@ -303,4 +306,27 @@ export function setExpanded(tree, id, expanded) {
 export function setAllExpanded(tree, expanded) {
   const visit = (nodes) => nodes.map((n) => (isGroup(n) ? { ...n, expanded, children: visit(n.children) } : n))
   return visit(tree)
+}
+
+/** Move a node into the group directly above it (as its last child). Keyboard "indent". */
+export function indentNode(tree, id) {
+  const loc = locate(tree, id)
+  if (!loc || loc.index === 0) return tree
+  const prev = loc.siblings[loc.index - 1]
+  if (!isGroup(prev)) return tree
+  if (loc.depth + 1 + subtreeHeight(loc.node) >= MAX_DEPTH) return tree
+  const { tree: without } = removeNode(tree, id)
+  return mapNode(without, prev.id, (g) => ({ ...g, expanded: true, children: [...g.children, loc.node] }))
+}
+
+/** Move a node out of its group, directly below the group. Keyboard "outdent". */
+export function outdentNode(tree, id) {
+  const loc = locate(tree, id)
+  if (!loc?.parent) return tree
+  return moveNode(tree, id, loc.parent.id, 'after')
+}
+
+/** Group ids along the path, root first, with names (for breadcrumbs). */
+export function pathOf(tree, id) {
+  return ancestorIds(tree, id).map((gid) => findNode(tree, gid))
 }

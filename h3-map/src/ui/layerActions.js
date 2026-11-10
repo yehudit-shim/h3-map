@@ -1,0 +1,98 @@
+// Actions available on a layer-tree node. One list feeds the context menu, the "More" button and
+// keyboard shortcuts, so every layer type (and future ones) gets the same behaviour with no
+// type-specific UI code.
+import {
+  ArrowDown, ArrowUp, Copy, Crosshair, Eye, EyeOff, FolderInput, FolderOutput, FolderPlus, Info, Pencil, SlidersHorizontal, Trash2, Ungroup,
+} from 'lucide-react'
+import { isGroup, layerIdsOf, locate } from '../layers/tree.js'
+import { unionBounds } from '../lib/geo.js'
+import { zoomToBounds } from '../map/mapActions.js'
+import { useDataStore } from '../state/dataStore.js'
+import { useLayersStore } from '../state/layersStore.js'
+import { notify } from '../state/notifyStore.js'
+import { useUiStore } from '../state/uiStore.js'
+
+/** Data extent of a layer, or the union of the extents inside a group. */
+export function nodeBounds(node, entries = useDataStore.getState().entries) {
+  if (!node) return null
+  const { layers } = useLayersStore.getState()
+  const ids = new Set(layerIdsOf(node))
+  return unionBounds(layers.filter((l) => ids.has(l.id)).map((l) => entries[l.sourceId]?.bounds))
+}
+
+export function zoomToNode(node) {
+  const b = nodeBounds(node)
+  if (b) zoomToBounds(b)
+  return !!b
+}
+
+/**
+ * @param {object} node layer config or group
+ * @param {{rename: () => void}} hooks UI callbacks that live in components (inline rename)
+ */
+export function nodeActions(node, { rename }) {
+  const s = useLayersStore.getState()
+  const loc = locate(s.tree, node.id)
+  const group = isGroup(node)
+  const prev = loc && loc.index > 0 ? loc.siblings[loc.index - 1] : null
+  const multi = s.selectedIds.length > 1 && s.selectedIds.includes(node.id)
+  const noun = group ? 'group' : 'layer'
+  return [
+    { id: 'toggle', label: node.visible ? `Hide ${noun}` : `Show ${noun}`, icon: node.visible ? EyeOff : Eye, onSelect: () => s.toggleVisible(node.id) },
+    { id: 'zoom', label: `Zoom to ${noun}`, icon: Crosshair, disabled: !nodeBounds(node), onSelect: () => zoomToNode(node) },
+    { id: 'properties', label: 'Properties…', icon: Info, onSelect: () => useUiStore.getState().openProperties(node.id) },
+    ...(group
+      ? []
+      : [{ id: 'style', label: 'Edit style', icon: SlidersHorizontal, onSelect: () => { s.setActive(node.id); useUiStore.getState().openStyle() } }]),
+    { separator: true },
+    { id: 'rename', label: 'Rename', icon: Pencil, shortcut: 'F2', onSelect: rename },
+    { id: 'duplicate', label: 'Duplicate', icon: Copy, onSelect: () => s.duplicateNode(node.id) },
+    { separator: true },
+    { id: 'up', label: 'Move up', icon: ArrowUp, shortcut: 'Alt+↑', disabled: !loc || loc.index === 0, onSelect: () => s.moveLayer(node.id, -1) },
+    { id: 'down', label: 'Move down', icon: ArrowDown, shortcut: 'Alt+↓', disabled: !loc || loc.index === loc.siblings.length - 1, onSelect: () => s.moveLayer(node.id, 1) },
+    { id: 'indent', label: 'Move into group above', icon: FolderInput, shortcut: 'Alt+→', disabled: !isGroup(prev), onSelect: () => s.indent(node.id) },
+    { id: 'outdent', label: 'Move out of group', icon: FolderOutput, shortcut: 'Alt+←', disabled: !loc?.parent, onSelect: () => s.outdent(node.id) },
+    { separator: true },
+    multi
+      ? { id: 'group', label: `Group ${s.selectedIds.length} selected`, icon: FolderPlus, onSelect: () => s.createGroup(s.selectedIds) }
+      : { id: 'group', label: 'Add to new group', icon: FolderPlus, onSelect: () => s.createGroup([node.id]) },
+    ...(group ? [{ id: 'ungroup', label: 'Ungroup', icon: Ungroup, onSelect: () => s.ungroup(node.id) }] : []),
+    { separator: true },
+    { id: 'remove', label: group ? 'Remove group and its layers' : 'Remove layer', icon: Trash2, danger: true, onSelect: () => s.removeNode(node.id) },
+  ]
+}
+
+/**
+ * Where a dragged node lands relative to the row under the pointer.
+ * Layers: upper half = before (above), lower half = after. Groups: top band = before; the rest drops
+ * inside, except the bottom band of a collapsed group, which drops after it.
+ */
+export function dropPosition(offsetY, height, { group = false, expanded = false } = {}) {
+  if (!(height > 0)) return group ? 'inside' : 'before'
+  const r = offsetY / height
+  if (!group) return r < 0.5 ? 'before' : 'after'
+  if (r < 0.25) return 'before'
+  if (r > 0.75 && !expanded) return 'after'
+  return 'inside'
+}
+
+export function download(filename, text) {
+  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.append(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+export async function importLayersFile(file) {
+  try {
+    const { problems, count } = useLayersStore.getState().loadProject(await file.text())
+    notify(`Loaded ${count} layer${count === 1 ? '' : 's'} from ${file.name}`, { kind: 'success' })
+    if (problems.length) notify(`${problems.length} item(s) were skipped: ${problems.slice(0, 3).join('; ')}`, { kind: 'warn' })
+  } catch (error) {
+    notify(`Could not load ${file.name}: ${error.message}`, { kind: 'error' })
+  }
+}

@@ -16,6 +16,7 @@ export function createLayerConfig(typeId, sourceId, overrides = {}) {
   }
   const { style: styleOverrides, ...rest } = overrides
   return {
+    kind: 'layer',
     id: createId(typeId),
     name: `${type.label} · ${source.name.replace(/\s*\(.*\)$/, '')}`,
     type: typeId,
