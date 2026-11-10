@@ -56,6 +56,7 @@ async def schemas(conn: AsyncConnection) -> list[dict]:
     cur = await conn.execute(
         f"""SELECT n.nspname AS name,
                (SELECT count(*) FROM pg_class c WHERE c.relnamespace = n.oid AND c.relkind IN ('r','v','m','p','f')
+                  AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid AND d.deptype = 'e')
                   AND has_table_privilege(c.oid, 'SELECT'))::int AS "tableCount"
             FROM pg_namespace n WHERE {_SCHEMA_FILTER} ORDER BY 1""", {"hidden": list(HIDDEN_SCHEMAS)})
     return await cur.fetchall()
@@ -143,6 +144,7 @@ async def tables(conn: AsyncConnection, schema: str, kind: str | None = None, ge
                                       AND t.typname IN ('int8','text','varchar')))) AS has_h3
             FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
             WHERE c.relkind IN ('r','v','m','p','f') AND n.nspname = %(schema)s
+              AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid = 'pg_class'::regclass AND d.objid = c.oid AND d.deptype = 'e')
               AND has_schema_privilege(n.oid, 'USAGE') AND has_table_privilege(c.oid, 'SELECT')
               AND (%(kind)s::text IS NULL OR c.relkind = %(kind)s)
               AND (%(q)s::text IS NULL OR c.relname ILIKE %(q)s ESCAPE '\')

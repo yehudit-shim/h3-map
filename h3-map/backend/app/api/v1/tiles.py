@@ -65,6 +65,8 @@ async def get_tile(request: Request, session_id: str = Path(max_length=64), z: i
                    y: int = Path(ge=0), user: User = Depends(viewer), pools: PoolManager = Depends(get_pools),
                    reg: tiles.SessionRegistry = Depends(get_sessions), settings: Settings = Depends(get_settings)) -> Response:
     s = reg.get(session_id, user.sub, user.role)
+    if not await pools.can_access(s.connection_id, user):
+        raise ApiError(403, "forbidden", "You have no access to this connection.")
     if x >= 2 ** z or y >= 2 ** z:
         raise not_found("Tile coordinates out of range.")
     cache = {"Cache-Control": f"private, max-age={settings.tile_cache_max_age_s}"}

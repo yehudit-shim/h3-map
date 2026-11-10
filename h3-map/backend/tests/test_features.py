@@ -288,7 +288,7 @@ async def test_writes_impossible_on_every_path(client, auth, admin_dsn, app):
         ("DELETE", "/api/v1/connections/fixtures", None), ("POST", f"{BASE}/pts_4326/profile", {})]
     for method, path, body in attempts:
         r = await client.request(method, path, json=body, headers=auth["admin"])
-        assert r.status_code in (200, 404, 405, 422), (method, path, r.status_code)  # 200 = value was bound, matched nothing
+        assert r.status_code in (200, 404, 405, 409, 422), (method, path, r.status_code)  # 200 = value was bound, matched nothing; 409 = config connection is read-only
     for cid in ("fixtures", "admin"):  # even a superuser pool is read-only
         async with app.state.pools.connection(cid) as conn:
             for stmt in ("DELETE FROM fx.pts_4326", "UPDATE fx.pts_4326 SET pop = 0", "DROP TABLE fx.pts_4326",

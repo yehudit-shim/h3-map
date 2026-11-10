@@ -223,7 +223,7 @@ P1-01 → P2-01 → P3-01 → P6-01 → P6-03 → P6-05 → (P4-02, P5-02, P7-01
 
 ## Phase 6: PostgreSQL/PostGIS integration
 
-**Status (6A backend): P6-01 to P6-08 implemented** (131 backend tests, 93% coverage). Not run: Schemathesis contract tests and the large-table performance measurements. P6-09/P6-10 (frontend) are Phase 6B.
+**Status (6A backend): P6-01 to P6-08 implemented** (139 backend tests, 93% coverage). Not run: Schemathesis contract tests and the large-table performance measurements. P6-09/P6-10 (frontend) are Phase 6B.
 
 - [x] **P6-01 · Auth and RBAC (minimum viable)** (MVP)
   - **Implementation status:** HS256 JWT bearer, `POST /auth/login` for a single admin from env, roles viewer/editor/admin via `require_role` dependencies; a test walks all routes and fails if one has no auth dependency (only `/health` and `/auth/login` are public). Tests: 401 (missing/expired/bad signature), role matrix.
@@ -231,12 +231,12 @@ P1-01 → P2-01 → P3-01 → P6-01 → P6-03 → P6-05 → (P4-02, P5-02, P7-01
   - Deps: P1-06 · Critical · M
   - Acceptance: unauthenticated access returns 401; role matrix tests pass; see Q3.
 - [x] **P6-02 · Connection manager and pools** (MVP)
-  - **Implementation status:** `connections.yaml` with secrets from env; one lazy `AsyncConnectionPool` per connection (read-only session, statement/idle/lock timeouts via connection options); SSRF host guard; `POST /connections/{id}/test`. Tests: no password in responses or captured logs, pool recovery after backends are killed, read-only even for a superuser pool. Not done: user-defined connections (POST/PATCH/DELETE), encryption, per-user grants.
+  - **Implementation status:** `connections.yaml` with secrets from env; one lazy `AsyncConnectionPool` per connection (read-only session, statement/idle/lock timeouts via connection options); SSRF host guard; `POST /connections/{id}/test`. Tests: no password in responses or captured logs, pool recovery after backends are killed, read-only even for a superuser pool. User-defined connections (admin `POST`/`PATCH`/`DELETE`, Fernet-encrypted passwords in `app.connections`, SSRF check on create/edit), per-connection grants by token subject (`GET/PUT /connections/{id}/grants`, YAML `allowed_users`), enforced by a router dependency and on tile fetches. Not done: OIDC users/`app.users` rows, UI (P6-10).
   - Tech: env-defined connections first; encrypted user-defined connections second; psycopg3 async pool; session read-only + timeouts; host guard.
   - Deps: P6-01 · Critical · L
   - Acceptance: connect/test works; password never in responses/logs (test); pool failure recovery test.
 - [x] **P6-03 · Catalogue discovery endpoints** (MVP)
-  - **Implementation status:** Databases, schemas (+tableCount), tables/views/matviews/partitioned/foreign with `kind`, `geo`, `q` filters, columns, geometry columns from `pg_attribute` typmod (works for views) with sampling for unconstrained/mixed columns, privilege-aware. Tests compare with catalogue SQL on the fixtures, including a limited role. Known gap: PostGIS helper views still appear in lists.
+  - **Implementation status:** Databases, schemas (+tableCount), tables/views/matviews/partitioned/foreign with `kind`, `geo`, `q` filters, columns, geometry columns from `pg_attribute` typmod (works for views) with sampling for unconstrained/mixed columns, privilege-aware. Tests compare with catalogue SQL on the fixtures, including a limited role. Extension-owned objects (PostGIS helper views, `spatial_ref_sys`) are hidden from lists.
   - Tech: databases, schemas, tables/views, columns; geometry columns incl. views; privileges respected.
   - Deps: P6-02 · Critical · M
   - Acceptance: results match `psql` on the fixture DB incl. view and materialised view.
@@ -246,7 +246,7 @@ P1-01 → P2-01 → P3-01 → P6-01 → P6-03 → P6-05 → (P4-02, P5-02, P7-01
   - Deps: P6-03 · Critical · L
   - Acceptance: all fields correct on fixtures incl. SRID 0, mixed type, no index, un-analysed table; < 500 ms on 10M-row table.
 - [x] **P6-05 · Filter grammar and query builder; features endpoint** (MVP)
-  - **Implementation status:** Filter grammar (depth 6, 50 nodes), identifiers verified and composed with `sql.Identifier`, values bound, bbox by transforming the envelope, GeoJSON output, simplification on output by zoom, `truncated`, bbox required above a size, `POST /features/query`, `GET /features/{id}`, disconnect cancels the query. Tests: injection suite, EXPLAIN shows the GiST index, Hypothesis bbox vs brute-force `ST_Intersects` (exact for 4326/geography, 0.002 degree margin for projected tables), writes impossible. Arrow output not implemented.
+  - **Implementation status:** Filter grammar (depth 6, 50 nodes), identifiers verified and composed with `sql.Identifier`, values bound, bbox by transforming the envelope, GeoJSON output, simplification on output by zoom, `truncated`, bbox required above a size, `POST /features/query`, `GET /features/{id}`, disconnect cancels the query. Tests: injection suite, EXPLAIN shows the GiST index, Hypothesis bbox vs brute-force `ST_Intersects` (exact for 4326/geography, 0.002 degree margin for projected tables), writes impossible. `format=arrow` (Arrow IPC stream with WKB geometry) is implemented.
   - Tech: safe composition, bbox with envelope transform, simplification, caps, GeoJSON/Arrow outputs.
   - Deps: P6-03 · Critical · L
   - Acceptance: injection test suite passes; EXPLAIN shows index use; results equal brute-force on fixtures.

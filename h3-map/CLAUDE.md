@@ -24,6 +24,7 @@ Run from `h3-map/backend/` (Python 3.12 venv in `.venv`; see `docs/BACKEND.md`):
 - Dev server: `.venv/Scripts/python -m uvicorn --factory app.main:app_factory --loop none --port 8000` (`--loop none` is required on Windows). Env: `H3MAP_JWT_SECRET`, `H3MAP_ADMIN_PASSWORD`, `ANASTASIA_DB_PASSWORD` (see `.env.example`); connections are in `connections.yaml`.
 - Tests: `H3MAP_TEST_ADMIN_DSN=<superuser dsn> .venv/Scripts/python -m pytest` (creates and drops scratch DB `h3map_test`; coverage gate 80%). Never hardcode the DSN.
 - Large data / perf: `python -m scripts.seed.seed_large create|drop`, `python -m scripts.perf.run`.
+- User connections need `H3MAP_APP_DATABASE_URL` + `H3MAP_ENCRYPTION_KEY`; access is checked by `api/v1/access.py` (router dependency). Run `alembic upgrade head` for the `app` schema.
 - Rules: SQL only via `sql.Identifier` after `discovery.get_table` / `col_info` checks, values bound; every route needs `require_role` (a test enforces it); errors use the envelope in `app/errors.py`.
 
 ## Architecture (the parts that span files)

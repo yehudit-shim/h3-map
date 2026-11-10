@@ -108,7 +108,7 @@ def bbox_predicate(q: Q, g: GeomColumn, bbox: tuple[float, float, float, float],
     return parts[0] if len(parts) == 1 else sql.SQL("({})").format(sql.SQL(" OR ").join(parts))
 
 
-def geojson_output(g: GeomColumn, assumed: int | None, tolerance: float | None) -> sql.Composable:
+def geojson_output(g: GeomColumn, assumed: int | None, tolerance: float | None, binary: bool = False) -> sql.Composable:
     """GeoJSON text of the geometry in 4326, optionally simplified (on the *output*, not in WHERE)."""
     col: sql.Composable = sql.Identifier(g.name)
     if g.storage == "geography":
@@ -119,7 +119,7 @@ def geojson_output(g: GeomColumn, assumed: int | None, tolerance: float | None) 
         geom = base if srid == 4326 else sql.SQL("ST_Transform({}, 4326)").format(base)
     if tolerance and not g.type.lower().endswith("point"):
         geom = sql.SQL("ST_SimplifyPreserveTopology({}, {})").format(geom, sql.Literal(float(tolerance)))
-    return sql.SQL("ST_AsGeoJSON({}, 6)").format(geom)
+    return sql.SQL("ST_AsBinary({})" if binary else "ST_AsGeoJSON({}, 6)").format(geom)
 
 
 def zoom_tolerance(zoom: float) -> float:

@@ -26,10 +26,20 @@ def create_app(settings: Settings | None = None, connection_defs: dict | None = 
             register_secret(s.get_secret_value())
 
     defs = connection_defs if connection_defs is not None else load_connection_defs(settings)
-    pools = PoolManager(settings, defs)
+    store = None
+    if settings.app_database_url and settings.encryption_key:
+        from .services.user_connections import UserConnectionStore
+        register_secret(settings.encryption_key.get_secret_value())
+        register_secret(settings.app_database_url.get_secret_value())
+        store = UserConnectionStore(settings.app_database_url.get_secret_value(), settings.encryption_key.get_secret_value())
+    pools = PoolManager(settings, defs, store)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        try:
+            await pools.load_user_defs()
+        except Exception as exc:  # the app DB being down must not stop the env connections from working
+            log.warning("could not load user connections: %s", type(exc).__name__)
         yield
         await pools.close()
 

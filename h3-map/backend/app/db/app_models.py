@@ -59,4 +59,4 @@ class ConnectionGrant(Base):
     __tablename__ = "connection_grants"
     __table_args__ = {"schema": SCHEMA}
     connection_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey(f"{SCHEMA}.connections.id", ondelete="CASCADE"), primary_key=True)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey(f"{SCHEMA}.users.id", ondelete="CASCADE"), primary_key=True)
+    subject: Mapped[str] = mapped_column(Text, primary_key=True)  # the JWT ``sub`` claim

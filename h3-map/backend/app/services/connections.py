@@ -10,6 +10,7 @@ import socket
 import time
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from typing import Any
 from pathlib import Path
 
 import psycopg
@@ -38,6 +39,7 @@ class ConnectionDef:
     statement_timeout_ms: int | None = None
     max_pool_size: int | None = None
     source: str = "env"
+    allowed_users: tuple[str, ...] = ()  # env connections: empty = every authenticated user
 
     def public(self, status: str = "unknown") -> dict:
         """Everything a client may see. There is deliberately no password field here."""
@@ -69,7 +71,8 @@ def load_connection_defs(settings: Settings, env=os.environ) -> dict[str, Connec
                                  port=int(raw.get("port", 5432)), database=str(raw["database"]),
                                  username=str(raw["username"]), password=pw, sslmode=str(raw.get("sslmode", "prefer")),
                                  statement_timeout_ms=raw.get("statement_timeout_ms"),
-                                 max_pool_size=raw.get("max_pool_size"))
+                                 max_pool_size=raw.get("max_pool_size"),
+                                 allowed_users=tuple(str(u) for u in raw.get("allowed_users", []) or []))
     return out
 
 
@@ -96,14 +99,47 @@ def check_host(host: str, settings: Settings) -> None:
 class PoolManager:
     """One lazily created ``AsyncConnectionPool`` per connection id."""
 
-    def __init__(self, settings: Settings, defs: dict[str, ConnectionDef]):
+    def __init__(self, settings: Settings, defs: dict[str, ConnectionDef], store: Any = None):
         self.settings = settings
+        self.store = store  # UserConnectionStore | None
         self.defs = dict(defs)
         self._pools: dict[str, psycopg_pool.AsyncConnectionPool] = {}
         self._lock = asyncio.Lock()
         self._h3: dict[str, bool] = {}
         for d in self.defs.values():
             register_secret(d.password)
+
+    # --- user-defined connections and access ------------------------------------------------------------
+    def add_def(self, d: ConnectionDef) -> None:
+        self.defs[d.id] = d
+        register_secret(d.password)
+
+    async def remove_def(self, cid: str) -> None:
+        self.defs.pop(cid, None)
+        self._h3.pop(cid, None)
+        pool = self._pools.pop(cid, None)
+        if pool is not None:
+            await pool.close()
+
+    async def load_user_defs(self) -> None:
+        if self.store is not None:
+            for d in await self.store.list():
+                self.add_def(d)
+
+    async def resolve(self, cid: str) -> None:
+        """Make sure a user connection created by another worker is known here."""
+        if cid not in self.defs and self.store is not None:
+            try:
+                self.add_def(await self.store.get(cid))
+            except ApiError:
+                pass
+
+    async def can_access(self, cid: str, user: Any) -> bool:
+        if user.role == "admin":
+            return True
+        d = self.get_def(cid)
+        allowed = list(d.allowed_users) if d.source == "env" else (await self.store.grants(cid) if self.store else [])
+        return not allowed or user.sub in allowed
 
     def get_def(self, cid: str) -> ConnectionDef:
         d = self.defs.get(cid)

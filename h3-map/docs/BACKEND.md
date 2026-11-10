@@ -33,6 +33,15 @@ Large datasets for measurements are generated on demand: `python -m scripts.seed
 `python -m scripts.perf.run` (writes `perf-results/latest.json`).
 Frontend/backend parity check: `tests/fixtures/h3_parity_10k.json` (h3-py) is verified against h3-js by `tests/js/verify_h3js.mjs`.
 
+## Connections, access and Arrow
+
+- Env connections live in `connections.yaml` (read-only; optional `allowed_users: [sub, ...]`).
+- User connections (admin only) need `H3MAP_APP_DATABASE_URL` (run `alembic upgrade head` there) and `H3MAP_ENCRYPTION_KEY`
+  (a Fernet key: `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`).
+  `POST/PATCH/DELETE /connections`; passwords are write-only. `GET/PUT /connections/{id}/grants` limits a connection to
+  token subjects; an empty list means every authenticated user. Admins always have access.
+- `GET .../features?format=arrow` (or `format` in the POST body) returns an Arrow IPC stream.
+
 ## Layout
 
 `app/main.py` factory, middleware, handlers · `app/config.py` settings (`H3MAP_*`) · `app/errors.py` error envelope ·

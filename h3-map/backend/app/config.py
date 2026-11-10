@@ -55,7 +55,9 @@ class Settings(BaseSettings):
     # --- misc -------------------------------------------------------------
     cors_origins: list[str] = ["http://localhost:5173"]
     h3_sql: str = Field("auto", pattern="^(auto|off)$")  # use h3-pg when available
-    app_database_url: str | None = None  # app metadata DB (Alembic); not needed by the data routes
+    # app metadata DB (users' saved connections and grants). Both are needed to enable user-defined connections.
+    app_database_url: SecretStr | None = None
+    encryption_key: SecretStr | None = None  # Fernet key: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     log_level: str = "INFO"
 
 

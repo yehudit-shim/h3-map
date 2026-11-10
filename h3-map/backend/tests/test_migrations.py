@@ -20,6 +20,18 @@ def _tables(dsn):
 
 
 def test_alembic_upgrade_downgrade_cycle(pg_server, monkeypatch, admin_dsn):
+    mig_dsn = admin_dsn.rsplit("/", 1)[0] + "/h3map_test_mig"
+    with psycopg.connect(admin_dsn, autocommit=True) as c:
+        c.execute("DROP DATABASE IF EXISTS h3map_test_mig WITH (FORCE)")
+        c.execute("CREATE DATABASE h3map_test_mig")
+    try:
+        _cycle(monkeypatch, mig_dsn)
+    finally:
+        with psycopg.connect(admin_dsn, autocommit=True) as c:
+            c.execute("DROP DATABASE IF EXISTS h3map_test_mig WITH (FORCE)")
+
+
+def _cycle(monkeypatch, admin_dsn):
     monkeypatch.setenv("H3MAP_APP_DATABASE_URL", admin_dsn)
     cfg = _cfg()
     command.upgrade(cfg, "head")
