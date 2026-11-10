@@ -101,6 +101,7 @@ class PoolManager:
         self.defs = dict(defs)
         self._pools: dict[str, psycopg_pool.AsyncConnectionPool] = {}
         self._lock = asyncio.Lock()
+        self._h3: dict[str, bool] = {}
         for d in self.defs.values():
             register_secret(d.password)
 
@@ -167,9 +168,12 @@ class PoolManager:
                 "serverVersion": row["v"].split(",")[0], "latencyMs": round((time.perf_counter() - t0) * 1000, 1)}
 
     async def has_h3(self, cid: str) -> bool:
-        async with self.connection(cid) as conn:
-            cur = await conn.execute("SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname='h3') AS h3")
-            return bool((await cur.fetchone())["h3"])
+        """Is the h3 extension installed in this database? Cached per connection."""
+        if cid not in self._h3:
+            async with self.connection(cid) as conn:
+                cur = await conn.execute("SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname='h3') AS h3")
+                self._h3[cid] = bool((await cur.fetchone())["h3"])
+        return self._h3[cid]
 
     async def close(self) -> None:
         for p in self._pools.values():
