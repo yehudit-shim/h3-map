@@ -29,7 +29,7 @@ describe('ErrorBoundary', () => {
 
 describe('LayerManager', () => {
   beforeEach(() => {
-    useLayersStore.setState({ layers: [], activeId: null })
+    useLayersStore.getState().setTree([])
     useDataStore.setState({ entries: {} })
   })
 
@@ -101,7 +101,7 @@ describe('StylePanel', () => {
     expect(useLayersStore.getState().layers.find((x) => x.id === l.id).style.ramp).toBe('magma')
   })
   it('shows an empty state without an active layer', () => {
-    useLayersStore.setState({ layers: [], activeId: null })
+    useLayersStore.getState().setTree([])
     render(<StylePanel />)
     expect(screen.getByText('No layer selected')).toBeInTheDocument()
   })

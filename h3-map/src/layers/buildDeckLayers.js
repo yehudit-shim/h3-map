@@ -31,13 +31,14 @@ export function buildDeckLayers(configs, sourceEntries, ctx) {
   const prepared = {}
   for (const config of configs) {
     if (!config.visible) continue
-    const entry = sourceEntries[config.sourceId]
-    if (entry?.status !== 'ready') continue
     const type = getLayerType(config.type)
     if (!type) {
       errors.push({ layerId: config.id, error: new Error(`Unknown layer type "${config.type}"`) })
       continue
     }
+    // Sourceless layers (XYZ, WMS) carry their service in the style and need no loaded data.
+    const entry = type.sourceless ? { status: 'ready', data: null } : sourceEntries[config.sourceId]
+    if (entry?.status !== 'ready') continue
     try {
       const p = prepareLayer(type, config, entry.data, ctx)
       prepared[config.id] = p

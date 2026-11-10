@@ -257,6 +257,19 @@ Changes relative to the design above, made while implementing the first two phas
 | Basemaps | self-hosted | CARTO Positron / Dark Matter public styles (OpenStreetMap data) + Blank, overridable by env | Fast to start. Review CARTO's terms before production use; self-hosting remains task P2-06. If a style fails to load the map falls back to Blank and shows a toast. |
 | Testing | Vitest + Playwright | Vitest (+ Testing Library, jsdom) and `playwright-core` driving the system Chrome/Chromium (`npm run test:e2e`) | No browser download is needed; `@playwright/test` can replace the script later. |
 
+### Backend deviations (Phase 6A)
+
+| Area | Design | Implemented | Reason |
+|---|---|---|---|
+| Tiles | `GET /connections/{c}/tiles/{schema}/{table}/{z}/{x}/{y}.mvt` (DATABASE_INTEGRATION section 4) | Sessions: `POST /connections/{id}/tiles/sessions`, `GET /tiles/{sessionId}/{z}/{x}/{y}.mvt`, `/tilejson`, `DELETE` | API_SPECIFICATION is the source of truth. Sessions are in memory (TTL 8 h), owned by the creating user (admin may read) and not shared across processes. |
+| Connections | admin-managed CRUD, encrypted user connections, grants | `connections.yaml` (read-only, secrets from env, optional `allowed_users`) plus admin CRUD (`POST`/`PATCH`/`DELETE /connections`) stored in `app.connections` with Fernet-encrypted passwords (`H3MAP_ENCRYPTION_KEY`, `H3MAP_APP_DATABASE_URL`; both required, else 501). Grants: `GET/PUT /connections/{id}/grants` keyed by token `sub` (`app.connection_grants.subject`, migration 0002); no grants = open to every authenticated user, admins always allowed. Checked by a router dependency and again on tile fetches | Connection ids of user connections are UUIDs; env ids are slugs. Env connections are read-only (409). The built-in login has no `app.users` rows, so grants use the JWT subject. |
+| Auth | OIDC-ready JWT | HS256 JWT, single admin from env; other roles only via tokens | Minimum viable P6-01. |
+| Features | `limit` / `after`, Arrow | Ordered keyset paging only with `paginate=true` or `after`. `format=arrow` returns an Arrow IPC stream: attribute columns, `__fid`, `__geometry` (WKB, EPSG:4326), paging info in schema metadata | Avoids an ORDER BY on large bbox queries. H3 endpoints stay JSON. |
+| H3 | h3-pg or h3-py | SQL roll-ups use the bigint bit layout (no extension needed); point binning uses h3-pg when installed (`H3MAP_H3_SQL=auto`), else h3-py on a bbox-limited scan (`max_h3_scan_rows`). `/h3/cells/export` not implemented | Works on databases without the h3 extension; export is out of scope. |
+| Catalogue | hide system objects | Objects owned by an extension (`pg_depend` type `e`: PostGIS views, `spatial_ref_sys`, ...) are hidden from schema and table lists; they stay readable by name | Keeps the browser free of extension internals. |
+| Windows | n/a | `app/__init__.py` selects the selector event loop; run uvicorn with `--loop none` | psycopg async cannot use the Proactor loop. |
+| Docker | `docker-compose.yml` with postgis | Not provided in Phase 6A | The project owner runs PostgreSQL themselves. |
+
 ### Layer pipeline as built
 
 ```

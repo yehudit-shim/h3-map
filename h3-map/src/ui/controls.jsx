@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import { cn } from '../lib/cn.js'
 import { rampGradientCss, RAMPS } from '../styling/colorRamps.js'
 
@@ -46,15 +46,44 @@ export function Slider({ value, onChange, min, max, step = 1, id, 'aria-label': 
   )
 }
 
-export function Switch({ checked, onChange, label }) {
+/** Text field that applies its value on blur / Enter (so a half-typed URL does not trigger requests). */
+export function TextInput({ value, onCommit, placeholder, id, 'aria-label': ariaLabel, invalid }) {
+  const [draft, setDraft] = useState(null)
+  const commit = () => {
+    if (draft !== null && draft !== (value ?? '')) onCommit(draft)
+    setDraft(null)
+  }
+  return (
+    <input
+      id={id}
+      aria-label={ariaLabel}
+      type="text"
+      spellCheck={false}
+      autoComplete="off"
+      placeholder={placeholder}
+      aria-invalid={invalid || undefined}
+      value={draft ?? value ?? ''}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') commit()
+        if (e.key === 'Escape') setDraft(null)
+      }}
+      className={cn('h-8 w-full rounded-md border bg-raised px-2 text-[13px] text-fg outline-none placeholder:text-muted focus-visible:border-accent', invalid ? 'border-danger' : 'border-line')}
+    />
+  )
+}
+
+export function Switch({ checked, onChange, label, disabled }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
       aria-label={label}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={cn('relative h-5 w-9 shrink-0 cursor-pointer rounded-full border transition-colors', checked ? 'border-accent bg-accent' : 'border-line bg-raised')}
+      className={cn('relative h-5 w-9 shrink-0 cursor-pointer rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-40', checked ? 'border-accent bg-accent' : 'border-line bg-raised')}
     >
       <span className={cn('absolute top-0.5 h-3.5 w-3.5 rounded-full transition-all', checked ? 'left-[18px] bg-accent-fg' : 'left-0.5 bg-muted')} />
     </button>

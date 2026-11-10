@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { getLayerType } from '../layers/index.js'
 import { formatNumber } from '../lib/format.js'
+import { effectiveLayers } from '../layers/tree.js'
 import { useLayersStore } from '../state/layersStore.js'
 import { useRuntimeStore } from '../state/runtimeStore.js'
 import { rampGradientCss } from '../styling/colorRamps.js'
@@ -9,6 +10,11 @@ import { rgbaCss } from '../styling/cssColor.js'
 function LegendBody({ spec }) {
   if (spec.kind === 'swatch') {
     return <span className="inline-block h-3 w-3 rounded-sm border border-white/30" style={{ background: spec.color }} />
+  }
+  if (spec.kind === 'note') return <div className="text-[10px] text-muted">{spec.text}</div>
+  if (spec.kind === 'image') {
+    // WMS GetLegendGraphic: hidden if the service has no legend for the layer.
+    return <img src={spec.src} alt={`Legend of ${spec.title}`} loading="lazy" className="max-h-40 max-w-full rounded-sm bg-white p-1" onError={(e) => (e.currentTarget.style.display = 'none')} />
   }
   if (spec.kind === 'gradient') {
     return (
@@ -43,15 +49,16 @@ function LegendBody({ spec }) {
 
 /** Floating legend for every visible layer. Reuses the memoised prepared data of the layer factory. */
 export default function Legend() {
-  const layers = useLayersStore((s) => s.layers)
+  const tree = useLayersStore((s) => s.tree)
   const prepared = useRuntimeStore((s) => s.prepared)
   const items = useMemo(
     () =>
-      layers
+      effectiveLayers(tree)
+        .reverse() // top layer first, like the layer manager
         .filter((l) => l.visible && prepared[l.id])
         .map((l) => ({ layer: l, spec: getLayerType(l.type).legend?.(l, prepared[l.id]) }))
         .filter((x) => x.spec),
-    [layers, prepared],
+    [tree, prepared],
   )
   if (!items.length) return null
   return (

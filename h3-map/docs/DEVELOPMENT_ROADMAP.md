@@ -3,9 +3,9 @@
 Legend: **Priority** Critical / High / Medium / Low. **Complexity** S (≤½ day), M (1-2 days), L (3-5 days), XL (>1 week). **MVP** marks tasks in the first release.
 Task block format: `- [ ] ID · Title` followed by Description / Tech / Deps / Priority · Complexity / Acceptance.
 
-## Implementation status (updated after Phases 1-2)
+## Implementation status (updated after Phase 5)
 
-Phases 1 and 2 were implemented together with the parts of Phases 3, 5 and 7 needed to deliver an interactive map backed by sample data (no database). Tasks marked `[x]` are complete and verified (unit tests, a browser end-to-end run in dev and production builds). Tasks that are only partly done are left unchecked with a note. **Not started:** P1-06, P1-07, P1-09, P1-10, P2-05, P2-06, P2-07 and everything in Phases 6, 8 and 9, plus the remaining Phase 10 tasks. See `SYSTEM_ARCHITECTURE.md` §11 for architectural changes made during implementation.
+Phases 1 and 2 were implemented together with the parts of Phases 3, 5 and 7 needed to deliver an interactive map backed by sample data (no database). Tasks marked `[x]` are complete and verified (unit tests, a browser end-to-end run in dev and production builds). Tasks that are only partly done are left unchecked with a note. **Not started:** P1-06, P1-07, P1-09, P1-10, P2-05, P2-06, P2-07 and everything in Phases 6, 8 and 9, plus the remaining Phase 10 tasks. See `SYSTEM_ARCHITECTURE.md` §11 for architectural changes made during implementation. **Phase 5 (H3) is implemented client-side except P5-08 and P5-09** (see the Phase 5 section; the h3-py parity fixture still has to be generated once). **Phase 4 is implemented client-side only** (P4-01, P4-03, P4-05; P4-02, P4-04, P4-07 and P4-08 need the backend or were out of scope; see the Phase 4 section). **Phase 3 (layer management) is complete**; the Phase 3 section lists the two items left for later (map-canvas context menu, server-side project storage).
 
 ## MVP definition
 
@@ -107,47 +107,54 @@ P1-01 → P2-01 → P3-01 → P6-01 → P6-03 → P6-05 → (P4-02, P5-02, P7-01
 
 ## Phase 3: Layer management
 
+**Status: complete**, except the map-canvas context menu and the backend part of P3-07, which needs Phase 6. Verified by 92 unit/component tests (58 before Phase 3) and the browser smoke test (36/36 checks on the dev build).
+
 - [x] **P3-01 · Layer type registry and factory** (MVP)
-  - **Implementation status:** `layers/registry.js` + `layers/layerFactory.js` + `layers/buildDeckLayers.js`; eight built-in layer types in `layers/types/`. Adding a type = one new file registered in `layers/index.js`; covered by a unit test.
+  - **Implementation status:** `layers/registry.js` + `layers/layerFactory.js` + `layers/buildDeckLayers.js`; eight built-in layer types in `layers/types/`. Adding a type = one new file registered in `layers/index.js`; covered by a unit test. Layer configs now carry `kind: 'layer'`.
   - Tech: `registerLayerType`, plugin contract from SYSTEM_ARCHITECTURE.md §3.2, JSON-Schema config validation, deck layer creation from configs with stable ids.
   - Deps: P2-02 · Critical · M
   - Acceptance: a new layer type can be added by adding one folder, with no change to `MapView`; unit tests for registry/factory.
 - [x] **P3-02 · Layers store and actions** (MVP)
-  - **Implementation status:** `state/layersStore.js`: add, remove, rename, duplicate, reorder, visibility, opacity, style update. Top of list is drawn on top.
+  - **Implementation status:** `state/layersStore.js` holds a layer **tree** (`tree`: layers and nested groups) as the single source of truth, plus a derived flat `layers` list (UI order, top first) that one `commit()` helper keeps in sync. Actions: add, remove (layer or group), duplicate (deep copy, fresh ids), rename, visibility, opacity, style update, move up/down, drag-drop move (`before`/`after`/`inside`/`end`), indent/outdent, group/ungroup, expand/collapse, multi-select. Pure tree operations live in `layers/tree.js`. Group visibility is ANDed and opacity multiplied down the tree (`effectiveLayers`); the map, legend and status bar use that. Undo is not implemented.
   - Tech: add/remove/rename/duplicate/reorder/visibility/opacity; undo-able; selectors.
   - Deps: P1-04, P3-01 · Critical · M
   - Acceptance: all actions unit tested; map order matches list order (top of list renders on top).
-- [ ] **P3-03 · Layer manager UI** (MVP)
-  - **Implementation status:** PARTIAL. Layer manager with visibility, opacity, rename (double click or button), duplicate, remove, move up/down buttons, load/error/retry states. Drag-and-drop reordering (dnd-kit) is not done.
+- [x] **P3-03 · Layer manager UI** (MVP)
+  - **Implementation status:** `ui/LayerManager.jsx` is a QGIS-style layer tree: a toolbar (add layer, new group / group selection, expand/collapse all, save/load menu), nested groups with layer counts, eye toggles (a child shows when a parent group hides it), opacity, inline rename (double click / F2), Ctrl/Cmd+click multi-select, and load/error/retry states. Reordering uses native HTML5 drag and drop instead of dnd-kit (no new dependency). It has drop indicators and a "move to bottom" drop zone, and refuses moves into a node's own subtree or deeper than 6 levels. Keyboard fallback: Alt+Up/Down reorder, Alt+Right moves into the group above, Alt+Left moves out of the group.
   - Tech: sortable list (dnd-kit, MIT), eye toggle, opacity slider, kebab menu, empty state.
   - Deps: P3-02, P1-03 · High · M
   - Acceptance: drag reorder with keyboard fallback; component tests pass.
-- [ ] **P3-04 · Zoom to layer and metadata dialog** (MVP)
-  - **Implementation status:** PARTIAL. Zoom-to-layer works from computed data bounds. The metadata dialog is not done (feature count and H3 resolution/cell count are shown inline in the layer row).
+- [x] **P3-04 · Zoom to layer and metadata dialog** (MVP)
+  - **Implementation status:** Zoom to a layer or a group (a group uses the union of its layers' data extents, `lib/geo.js#unionBounds`). `ui/LayerProperties.jsx` is a properties dialog: general info, effective visibility/opacity, group path, data source, feature count, H3 resolution/cells, attribute list, extent and the style JSON. For a group it shows the contents and the combined extent. Extents crossing the antimeridian are not handled specially yet (the sample data does not cross it). DB layers come with Phase 6.
   - Tech: layer extent from source metadata, `fitBounds`; metadata panel.
   - Deps: P3-02 · High · S
   - Acceptance: zoom works for file and DB layers; antimeridian-safe bounds.
 - [x] **P3-05 · Right panel shell: style and inspector tabs** (MVP)
-  - **Implementation status:** Right panel with Inspector and Style tabs; style form is generated from each layer type's `controls` schema (`ui/StylePanel.jsx`).
+  - **Implementation status:** Right panel with Inspector and Style tabs. The style form is generated from each layer type's `controls` schema (`ui/StylePanel.jsx`). Fill/line colors, line width, point size, polygon/H3 extrusion and attribute-based styling (numeric ramps with classification, categorical palettes) are all schema-driven. Phase 3 fixed a bug: `showIf` was called without the data source, so the numeric "Color by" controls (ramp, classification, classes, reverse) never appeared.
   - Tech: panel container, selection routing, schema-driven form renderer.
   - Deps: P3-03 · High · M
   - Acceptance: selecting a layer shows style form generated from its config schema.
 - [x] **P3-06 · Hover tooltips and click selection** (MVP)
-  - **Implementation status:** Hover tooltips (`getTooltip`) and click selection (`useDeckLayers.js`); Escape-to-clear is not implemented, click on empty map or the clear button clears the selection.
+  - **Implementation status:** Hover tooltips (`getTooltip`) and click selection (`useDeckLayers.js`). Escape clears the selection (`app/Workspace.jsx`), as do a click on empty map and the clear button. The Inspector shows which layer a feature belongs to. Removing a layer or group clears a selection that belongs to it.
   - Tech: deck `onHover`/`onClick`, `selectionStore`, highlight.
   - Deps: P3-01 · High · M
   - Acceptance: tooltip shows configured columns; click selects; Esc clears.
 - [ ] **P3-07 · Save/load layer configs and projects** (R2)
+  - **Implementation status:** PARTIAL (browser side done). The tree is auto-saved to localStorage (`h3map.layers`, zustand `persist`) and restored on reload. Export/import of a project JSON file (`{format: 'h3map.project', schemaVersion: 1, layers}`) goes through `layers/project.js`. It migrates schema 0 (the Phase 1-2 flat list), rejects newer versions, drops layers with unknown types or sources, fills missing style keys from the type defaults, clamps values and de-duplicates ids. If every saved layer is invalid, the current layers are kept. "Reset to default layers" is in the same menu. Not done: the server-side `/layers` and `/projects` APIs (they need the Phase 6 backend).
   - Tech: API `/layers`, `/projects`, localStorage draft, config `schema_version` migrations.
   - Deps: P6-01, P3-02 · Medium · M
   - Acceptance: reload restores layers; import/export project JSON.
-- [ ] **P3-08 · Context menu and layer groups** (R3)
+- [x] **P3-08 · Context menu and layer groups** (R3)
+  - **Implementation status:** Layer groups with nesting (max depth 6), collapse, and visibility/opacity that cascade to children. Every row has a right-click menu and a "More" button (`ui/Menu.jsx`, keyboard navigable), both built from one action list (`ui/layerActions.js`): show/hide, zoom, properties, edit style, rename, duplicate, move up/down/in/out, group, ungroup, remove. Not done: a context menu on the map canvas itself.
   - Deps: P3-03 · Low · M · Acceptance: context menu actions on map and layers; grouped layers collapse and toggle together.
 
 ## Phase 4: Standard GIS layers
 
-- [ ] **P4-01 · Vector layer from GeoJSON file/URL** (MVP)
-  - **Implementation status:** PARTIAL. GeoJSON FeatureCollections drive every layer (sample data via `data/sources.js`); loading a user GeoJSON file/URL and worker parsing are not done.
+**Status: client-side part complete** (P4-01, P4-03, P4-05). Not done: P4-02 (PostGIS), P4-04 (MVT), P4-06, P4-07, P4-08, P4-09. Verified by unit tests (parsers, jobs, source registry, layer types, project migration, dialog), the browser smoke test and `e2e/large-files.mjs` (50 MB GeoJSON, 500k-row CSV).
+
+- [x] **P4-01 · Vector layer from GeoJSON file/URL** (MVP)
+  - **Implementation status:** "Add layer" dialog (GeoJSON tab: file picker, URL; drag and drop of a file onto the map). Parsing runs in a Web Worker (`data/loaders/parse.worker.js`, logic in `jobs.js`, `geojsonParse.js`) with read/parse progress, cancel and error states; results come back in 20k-feature slices so no single message blocks the UI. All geometry types are accepted (Multi*, bare geometry/Feature, GeometryCollection is split into one feature per member). Fields and types (number/string) are inferred. CRS: a declared non-WGS84 `crs` and projected-looking coordinates produce warnings (projected data gets no extent, so zoom-to is disabled); no reprojection. User data is registered at runtime in `data/sources.js` via `data/userSources.js` (`kind: 'file'|'url'`, same `fields` + `load()` seam). Measured with a 50 MB / 222k-feature mixed file: parsing happens in the worker (longest main-thread task ~100 ms); adding it as a `geojson` layer blocks ~3.4 s on SwiftShader, which profiling attributes to WebGL shader linking, not data work (not measured on a real GPU). Not done: reprojection, streaming/incremental GeoJSON parsing (the whole file is read into memory), gzip, files over a few hundred MB, loaders.gl.
+  - Persistence: file data is never saved. Only a reference (name, file name, geometry, fields, CSV columns, or URL) goes into the project JSON and localStorage; a restored file layer shows "Reload file…", a URL layer reloads itself. Unused user sources and their cached data are freed when their last layer is removed.
   - Tech: loaders.gl or `fetch`; `GeoJsonLayer`; all geometry types incl. GeometryCollection; large-file worker parse; CRS check (GeoJSON is 4326).
   - Deps: P3-01 · Critical · M
   - Acceptance: points, lines, polygons, multi and collections render; 50 MB file parses off the main thread.
@@ -155,14 +162,16 @@ P1-01 → P2-01 → P3-01 → P6-01 → P6-03 → P6-05 → (P4-02, P5-02, P7-01
   - Tech: provider calling `/features` with viewport bbox, debounce, abort stale requests, `truncated` banner.
   - Deps: P6-05, P3-01 · Critical · L
   - Acceptance: panning reloads within a bbox; stale responses discarded; truncated banner appears when capped.
-- [ ] **P4-03 · CSV points layer** (MVP)
+- [x] **P4-03 · CSV points layer** (MVP)
+  - **Implementation status:** CSV tab (file or URL) using papaparse inside the same worker. Lat/lon columns are detected by name (lat/latitude/y, lon/lng/long/longitude/x and variants) and confirmed against the values; if that fails, or to override, a column picker lists all columns with a preview of the first rows. Column types (number/string) are inferred; identifiers with leading zeros stay text; decimal commas are accepted in coordinates. Bad rows (missing/non-numeric/out-of-range coordinates, wrong field count) are counted, listed with reasons, downloadable as CSV (first 10,000 recorded) and kept in the layer's Properties > Import report. A 500k-row, 21 MB CSV parses in ~4 s with a longest main-thread task of ~100 ms and the layer draws without a freeze. The result is a GeoJSON point source, so all point layer types work. Not done: other encodings than UTF-8, WKT/geometry columns, auto-continue without the confirm click, saving the bad-row list across reloads.
   - Tech: papaparse in worker, lat/lon column detection and manual pick, type inference.
   - Deps: P3-01 · High · M
   - Acceptance: bad rows reported; 500k rows load without freezing.
 - [ ] **P4-04 · MVT layer (external and backend)** (R2)
   - Tech: `MVTLayer`, auth headers via `loadOptions.fetch`, feature id for picking, `binary` option.
   - Deps: P6-07 · High · M · Acceptance: renders tiles from the backend and from a public MVT URL; picking works.
-- [ ] **P4-05 · XYZ raster and WMS layers** (R2)
+- [x] **P4-05 · XYZ raster and WMS layers** (R2)
+  - **Implementation status:** New sourceless layer types `xyz` (TileLayer + BitmapLayer; `{z}/{x}/{y}`, `{-y}`, `{s}`/`{a-c}` subdomains) and `wms` (deck.gl `_WMSLayer`, exported under that experimental name in 9.4.1), each with `defaults`, `controls`, `describe`, `legend` (WMS uses GetLegendGraphic), `validate` and `attribution`. Opacity is the normal layer opacity; attribution is shown bottom-left on the map; tile/image errors raise one notice per layer. Sourceless layers have `sourceId: null`; project schema is now **v2** (adds `sources`; v0/v1 files migrate), invalid or non-http(s) URLs are dropped on load, and zoom-to-layer is disabled for them (no data extent). Not done: WMS GetCapabilities browsing (layer names are typed in), extents for web layers, WMS GetFeatureInfo, TMS/WMTS (P4-09), credentials/headers.
   - Tech: `TileLayer`+`BitmapLayer`; `WMSLayer` (present in geo-layers 9.4.1).
   - Deps: P3-01 · Medium · M · Acceptance: tile source and WMS URL load with opacity control and attribution.
 - [ ] **P4-06 · FlatGeobuf** (R3) — streaming bbox reads via `flatgeobuf`. Deps: P4-01 · Low · M · Acceptance: a 200 MB .fgb renders with bbox-limited requests.
@@ -174,8 +183,10 @@ P1-01 → P2-01 → P3-01 → P6-01 → P6-03 → P6-05 → (P4-02, P5-02, P7-01
 
 ## Phase 5: H3 integration
 
-- [ ] **P5-01 · H3 utilities module and worker** (MVP)
-  - **Implementation status:** PARTIAL. `h3/h3Utils.js` (validated wrappers, aggregation, cell description) tested against known vectors. No Web Worker yet (aggregation runs on the main thread; 20k points aggregate in well under a second).
+**Status: client-side part complete** except P5-08 (polygon/box selection and export) and P5-09 (cluster outlines, filtering). Verified by 201 unit/component tests (2 skipped until the h3-py fixture exists), the browser smoke test (66 checks) and `e2e/h3-large.mjs` (500k points).
+
+- [x] **P5-01 · H3 utilities module and worker** (MVP)
+  - **Implementation status:** `h3/h3Utils.js` now has validated `parentCell`, `childCells` (refuses more than 4 levels down and more than 50,000 cells), `gridDiskCells` (k <= 10) and `polygonCells` (refuses areas needing more than 200,000 cells), plus `assertCell`/`assertResolution` (H3 indexes must be hex strings; numbers and BigInts are rejected). Bulk work runs in a Web Worker (`h3/h3.worker.js`, logic in `h3Jobs.js`, async API in `h3Client.js`): the point set is copied to the worker once as typed arrays, aggregation runs in slices, a newer request for the same layer cancels a stale one, per-cell statistics (count/sum/avg/min/max) are cached per (dataset, resolution, field), and a batch `latLngToCell` is available. The in-process fallback exists only for tests (no `Worker`). Tests: known vectors, round trip at all 16 resolutions, 12 pentagons per resolution (5 boundary vertices at even, 10 at odd resolutions), pentagon child counts, parent/child consistency, input validation, worker job logic, service API. Not done: antimeridian / `cellsToMultiPolygon` tests, a worker-side `polygonToCells`, and the h3-py parity run (see P5-04).
   - Tech: wrappers over h3-js 4.x API (`latLngToCell`, `cellToBoundary`, `cellToParent`, `cellToChildren`, `gridDisk`, `polygonToCells`); input validation; worker for bulk ops.
   - Deps: P1-04 · Critical · M
   - Acceptance: H3 tests from TESTING_STRATEGY.md §5 pass (known vector, round trip, pentagon, parent/child).
@@ -186,55 +197,70 @@ P1-01 → P2-01 → P3-01 → P6-01 → P6-03 → P6-05 → (P4-02, P5-02, P7-01
   - Acceptance: renders a sample H3 JSON/CSV; style changes update immediately; 3D extrusion works.
 - [x] **P5-03 · Zoom→resolution mapping and controls** (MVP)
   - **Implementation status:** Auto (from zoom) / Fixed modes, 0-15 slider, edge length/area/cell-count readout. Mapping `res = clamp(round(zoom - 4.5), 0, 15)` produces ~30-60 px cells at the default view; further calibration at other latitudes remains.
+  - **Phase 5 calibration:** the old mapping gave 12-763 px cells over zoom 3-17 at the equator, because cell size grows 2.65x per resolution while the ground resolution only doubles per zoom level (resolution should rise ~0.71 per zoom, not 1). `zoomToH3Resolution(zoom, latitude)` now picks the resolution whose flat-to-flat width is closest to 42 px, using the Web Mercator scale at the view latitude. Measured widths over zoom 3-17 are 26-68 px at latitudes 0, 45 and 70 (unit-tested; monotonic and bounded). A strict 30-60 px band is not reachable with integer resolutions (consecutive sizes differ by 2.65x), so the achievable band is about 26-69 px. Visible change: the default Paris view (zoom 11, 48.8°N) now starts at resolution 8 instead of 7.
   - Tech: auto/fixed mode, slider 0-15 with edge length/area readouts, heuristic from H3_IMPLEMENTATION.md §5, calibrate visually.
   - Deps: P5-02 · High · M
   - Acceptance: cells stay 30-60 px; resolution displayed; monotonic and bounded (unit tests).
-- [ ] **P5-04 · H3 from file (CSV/GeoJSON points → H3 aggregation in worker)** (MVP)
+- [x] **P5-04 · H3 from file (CSV/GeoJSON points → H3 aggregation in worker)** (MVP)
+  - **Implementation status:** the H3 layer type declares an async `compute` step (`compute.key` / `compute.run`, a general plugin extension); `map/useComputed.js` runs it, aborts superseded runs, and keeps the previous result drawn until the next arrives. Any point source feeds it, including Phase 4 CSV and GeoJSON files and URLs. The points are cached in the worker, so changing resolution, aggregation or value field never re-parses or re-sends the file. Measured in Chrome with SwiftShader (no GPU) on a 500k-point CSV: first aggregation 2.2-2.5 s from clicking Add to cells drawn (worker ~1.2-1.4 s), longest main-thread task 210-430 ms; later resolution changes 1.0-1.3 s of worker time and a longest main-thread task of 70-150 ms. Results are capped at 250,000 cells (`MAX_DRAW_CELLS`): a finer request is coarsened automatically and the readout says so (resolution 9 over the 500k points became 7; that case needs several partial passes, ~3.5 s of worker time, and is not within the 3 s target). Under SwiftShader, drawing 200k+ cells stalls the compositor for several seconds (frame gaps up to 5 s with no main-thread work); this was not tested on a real GPU. The readout shows the worker time.
+  - **Not done:** the h3-py cross-check. `scripts/gen_h3_fixture.py` and `src/h3/parity.test.js` are in place, but the fixture could not be generated here (no h3 wheel for the installed Python 3.15, no C compiler, Docker daemon not running). Run `pip install h3 && python scripts/gen_h3_fixture.py` once and commit `src/h3/fixtures/h3py-parity.json`; until then the parity tests are reported as skipped. Also not done: viewport culling (all cells are sent to deck.gl), progress reporting from the worker, GeoJSON polygons as an H3 input (points only).
   - Tech: `latLngToCell` in a worker, aggregation (count/sum/avg), resolution change recomputes without re-parsing.
   - Deps: P5-01, P4-03 · High · M
   - Acceptance: 500k points aggregate in < 3 s; results equal h3-py on a fixture.
 - [x] **P5-05 · H3 cell inspector and selection** (MVP)
-  - **Implementation status:** Click selects a cell; inspector shows index, resolution, centre, area, pentagon flag, base cell, parent and children count; selection is cleared when the resolution changes. Multi-select is not implemented.
+  - **Implementation status:** Click selects a cell; inspector shows index, resolution, centre, area, pentagon flag, base cell, parent and children count; selection is cleared when the resolution changes. **Phase 5:** Shift-click adds or removes cells (`selectionStore.toggleCell`); with several cells the inspector shows a summary (cell count, points, sum/mean/min/max of the layer metric, total area). A cell of another layer or resolution starts a new selection. Cells that become invalid after a resolution change are cleared with a notice. Shift-click required turning off MapLibre box zoom (`boxZoom={false}`), because it swallows Shift+click before deck.gl sees it. Not done: box/polygon multi-select (P5-08).
   - Tech: click/shift-click, selection layer, inspector H3 tab (index, res, centre, area, parent chain, children count).
   - Deps: P5-02, P3-06 · High · M
   - Acceptance: values match h3-js; selection persists across resolution changes only when cells are still valid (otherwise cleared with notice).
 - [x] **P5-06 · H3 legend and colouring by attribute** (MVP)
   - **Implementation status:** Continuous / quantile / equal-interval colouring of cells by the aggregated attribute with a legend.
   - Deps: P7-01, P5-02 · High · S · Acceptance: population-coloured H3 with a graduated legend.
-- [ ] **P5-07 · Parent/child/neighbour overlays** (R2) — outline layer for parents, children (Δ≤4 guard), k-ring. Deps: P5-05 · Medium · M · Acceptance: overlays toggle and match h3-js.
+- [x] **P5-07 · Parent/child/neighbour overlays** (R2)
+  - **Implementation status:** The H3 inspector has toggles for the parent outline, children outlines (1-4 levels down, refused beyond that or beyond 15) and a k-ring (k 1-10). They are overlay deck.gl layers built by `layers/h3Overlays.js` and owned by the selection (`selectionStore.overlays`): they are not in the layer tree, are drawn on top, apply to all selected cells (capped at 20,000 overlay cells in total, with the refusal shown), and are reset by a plain click, by clearing, and when a resolution change clears the selection. Cells are produced by the validated h3Utils wrappers and unit-tested against h3-js (parent, children, grid disk, pentagons, multi-cell union, limits). Not done: overlays for a different layer than the primary selection, k-ring distance labels.
+  - Deps: P5-05 · Medium · M · Acceptance: overlays toggle and match h3-js.
 - [ ] **P5-08 · Polygon/box selection of cells and export** (R2) — draw → `polygonToCells`; export CSV/GeoJSON. Deps: P8-04, P5-05 · Medium · M · Acceptance: exported file validated in tests (index validity, boundary orientation).
 - [ ] **P5-09 · H3ClusterLayer outlines and H3 filtering** (R3) · Low · M · Acceptance: merged outlines by value; filter chips by value range.
 
 ## Phase 6: PostgreSQL/PostGIS integration
 
-- [ ] **P6-01 · Auth and RBAC (minimum viable)** (MVP)
+**Status (6A backend): P6-01 to P6-08 implemented** (139 backend tests, 93% coverage). Not run: Schemathesis contract tests and the large-table performance measurements. P6-09/P6-10 (frontend) are Phase 6B.
+
+- [x] **P6-01 · Auth and RBAC (minimum viable)** (MVP)
+  - **Implementation status:** HS256 JWT bearer, `POST /auth/login` for a single admin from env, roles viewer/editor/admin via `require_role` dependencies; a test walks all routes and fails if one has no auth dependency (only `/health` and `/auth/login` are public). Tests: 401 (missing/expired/bad signature), role matrix.
   - Tech: JWT bearer, OIDC-ready; MVP can use a single-admin local login or static API key behind a reverse proxy, but the **authorisation checks must exist** for every route (dependency injection).
   - Deps: P1-06 · Critical · M
   - Acceptance: unauthenticated access returns 401; role matrix tests pass; see Q3.
-- [ ] **P6-02 · Connection manager and pools** (MVP)
+- [x] **P6-02 · Connection manager and pools** (MVP)
+  - **Implementation status:** `connections.yaml` with secrets from env; one lazy `AsyncConnectionPool` per connection (read-only session, statement/idle/lock timeouts via connection options); SSRF host guard; `POST /connections/{id}/test`. Tests: no password in responses or captured logs, pool recovery after backends are killed, read-only even for a superuser pool. User-defined connections (admin `POST`/`PATCH`/`DELETE`, Fernet-encrypted passwords in `app.connections`, SSRF check on create/edit), per-connection grants by token subject (`GET/PUT /connections/{id}/grants`, YAML `allowed_users`), enforced by a router dependency and on tile fetches. Not done: OIDC users/`app.users` rows, UI (P6-10).
   - Tech: env-defined connections first; encrypted user-defined connections second; psycopg3 async pool; session read-only + timeouts; host guard.
   - Deps: P6-01 · Critical · L
   - Acceptance: connect/test works; password never in responses/logs (test); pool failure recovery test.
-- [ ] **P6-03 · Catalogue discovery endpoints** (MVP)
+- [x] **P6-03 · Catalogue discovery endpoints** (MVP)
+  - **Implementation status:** Databases, schemas (+tableCount), tables/views/matviews/partitioned/foreign with `kind`, `geo`, `q` filters, columns, geometry columns from `pg_attribute` typmod (works for views) with sampling for unconstrained/mixed columns, privilege-aware. Tests compare with catalogue SQL on the fixtures, including a limited role. Extension-owned objects (PostGIS helper views, `spatial_ref_sys`) are hidden from lists.
   - Tech: databases, schemas, tables/views, columns; geometry columns incl. views; privileges respected.
   - Deps: P6-02 · Critical · M
   - Acceptance: results match `psql` on the fixture DB incl. view and materialised view.
-- [ ] **P6-04 · Table profile (SRID, extent, count, indexes, H3 detection)** (MVP)
+- [x] **P6-04 · Table profile (SRID, extent, count, indexes, H3 detection)** (MVP)
+  - **Implementation status:** Profile with SRID, `ST_EstimatedExtent` (fallback bounded `ST_Extent`, reprojected to 4326), reltuples incl. -1, PK, indexes with spatial flag, H3 candidates, `recommendedStrategy`, warnings (no spatial index with a CREATE INDEX suggestion, no PK, SRID 0, mixed, never analysed, stale stats). Fixture tests pass. NOT MEASURED: latency on a 10M-row table (target < 500 ms).
   - Tech: per DATABASE_INTEGRATION.md §3; `ST_EstimatedExtent`; reltuples; strategy recommender; warnings.
   - Deps: P6-03 · Critical · L
   - Acceptance: all fields correct on fixtures incl. SRID 0, mixed type, no index, un-analysed table; < 500 ms on 10M-row table.
-- [ ] **P6-05 · Filter grammar and query builder; features endpoint** (MVP)
+- [x] **P6-05 · Filter grammar and query builder; features endpoint** (MVP)
+  - **Implementation status:** Filter grammar (depth 6, 50 nodes), identifiers verified and composed with `sql.Identifier`, values bound, bbox by transforming the envelope, GeoJSON output, simplification on output by zoom, `truncated`, bbox required above a size, `POST /features/query`, `GET /features/{id}`, disconnect cancels the query. Tests: injection suite, EXPLAIN shows the GiST index, Hypothesis bbox vs brute-force `ST_Intersects` (exact for 4326/geography, 0.002 degree margin for projected tables), writes impossible. `format=arrow` (Arrow IPC stream with WKB geometry) is implemented.
   - Tech: safe composition, bbox with envelope transform, simplification, caps, GeoJSON/Arrow outputs.
   - Deps: P6-03 · Critical · L
   - Acceptance: injection test suite passes; EXPLAIN shows index use; results equal brute-force on fixtures.
-- [ ] **P6-06 · Rows preview and column stats endpoints** (MVP)
+- [x] **P6-06 · Rows preview and column stats endpoints** (MVP)
+  - **Implementation status:** `/rows` (keyset `after` or offset, limit <= 1000, sort, geometry as WKT), `/stats` (min/max/mean/stddev/quantiles/histogram/distinct/topValues), `/extent` (optional filter). Tests compare with SQL.
   - Tech: keyset pagination, stats/histogram/quantiles/top values.
   - Deps: P6-05 · High · M · Acceptance: preview paginated; stats used by the styling engine.
-- [ ] **P6-07 · MVT tile endpoint with sessions** (MVP)
+- [x] **P6-07 · MVT tile endpoint with sessions** (MVP)
+  - **Implementation status:** Tile sessions, `ST_AsMVT`/`ST_AsMVTGeom`, 204 for empty, `Cache-Control` and ETag (304), per-tile feature cap, zoom-based simplification, TileJSON. Tests decode tiles (counts, ids, properties, geometry validity) and run 50 concurrent requests. NOT MEASURED: cold p95 on a 1M-row polygon table (target < 800 ms).
   - Tech: `ST_AsMVT`/`ST_AsMVTGeom`, session registry, ETag/cache headers, feature caps, zoom-dependent simplification.
   - Deps: P6-05 · Critical · L
   - Acceptance: 1M-row polygon table serves p95 < 800 ms cold; tile decode tests pass.
-- [ ] **P6-08 · H3 endpoints (cells, aggregate, info, polyfill)** (MVP)
+- [x] **P6-08 · H3 endpoints (cells, aggregate, info, polyfill)** (MVP)
+  - **Implementation status:** `/h3/cells` (h3index/bigint/text, roll-up, `maxCells` coarsening reports the resolution used), `/h3/aggregate` (h3-pg or h3-py engine), `/h3/resolutions`, `/h3/polyfill`, `/h3/cells/info`, `/h3/cells/children` (delta <= 4). Parity test: 10k points through h3-py, h3-pg and h3-js with a committed fixture. NOT MEASURED: 1M-cell viewport time (target < 500 ms). `cells/export` not implemented.
   - Tech: per API_SPECIFICATION.md §8; bigint→hex; `max_cells` coarsening; Arrow option later.
   - Deps: P6-04, P5-01 · Critical · L
   - Acceptance: parity tests (h3-py vs SQL vs h3-js) pass; 1M-cell table viewport < 500 ms.

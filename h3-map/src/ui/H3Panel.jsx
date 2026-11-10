@@ -23,7 +23,7 @@ export default function H3Panel() {
   }
   const type = getLayerType('h3')
   const source = getSource(layer.sourceId)
-  const controls = type.controls.filter((c) => c.group === 'data' && (!c.showIf || c.showIf(layer.style)))
+  const controls = type.controls.filter((c) => c.group === 'data' && (!c.showIf || c.showIf(layer.style, source)))
   return (
     <div>
       <div className="border-b border-line px-3 py-2.5">
