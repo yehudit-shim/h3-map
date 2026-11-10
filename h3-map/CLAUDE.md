@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-Phases 1-3, the client-side part of Phase 4 (GeoJSON/CSV files and URLs, XYZ and WMS layers) and the client-side part of Phase 5 (H3 worker, overlays, multi-select) of `docs/DEVELOPMENT_ROADMAP.md` are implemented: a working MapLibre + deck.gl workspace with a QGIS-style layer tree (groups, drag and drop, properties, save/load), eight layer types and a real H3 demo, running on bundled sample data. There is no backend, database, Docker setup or CI yet (Phase 6 and later). `docs/` is the source of truth for design. `docs/SYSTEM_ARCHITECTURE.md` §11 lists where the implementation deliberately differs from the original design. The roadmap marks which tasks are done.
+Phases 1-3, the client-side part of Phase 4 (GeoJSON/CSV files and URLs, XYZ and WMS layers) and the client-side part of Phase 5 (H3 worker, overlays, multi-select) of `docs/DEVELOPMENT_ROADMAP.md` are implemented: a working MapLibre + deck.gl workspace with a QGIS-style layer tree (groups, drag and drop, properties, save/load), eight layer types and a real H3 demo, running on bundled sample data. The backend half of Phase 6 (`backend/`, FastAPI + PostGIS, tasks P6-01 to P6-08) is implemented; the frontend does not use it yet (Phase 6B). There is no Docker setup or CI. `docs/` is the source of truth for design. `docs/SYSTEM_ARCHITECTURE.md` §11 lists where the implementation deliberately differs from the original design. The roadmap marks which tasks are done.
 
 The git root is the parent directory (`anastasia/`), not `h3-map/`.
 
@@ -16,6 +16,15 @@ Run from `h3-map/`:
 - `npm run build`, `npm run preview`, `npm run lint`
 - `npm test` runs Vitest (jsdom). One file: `npx vitest run src/layers/layers.test.js`. One test: `npx vitest run -t "name"`.
 - `npm run test:e2e` is a Playwright-core smoke test against a running app (`BASE_URL=http://localhost:5173`, `CHROME_PATH` if Chrome is not in a standard place). It needs WebGL, so it launches Chrome with SwiftShader flags.
+
+## Backend commands
+
+Run from `h3-map/backend/` (Python 3.12 venv in `.venv`; see `docs/BACKEND.md`):
+
+- Dev server: `.venv/Scripts/python -m uvicorn --factory app.main:app_factory --loop none --port 8000` (`--loop none` is required on Windows). Env: `H3MAP_JWT_SECRET`, `H3MAP_ADMIN_PASSWORD`, `ANASTASIA_DB_PASSWORD` (see `.env.example`); connections are in `connections.yaml`.
+- Tests: `H3MAP_TEST_ADMIN_DSN=<superuser dsn> .venv/Scripts/python -m pytest` (creates and drops scratch DB `h3map_test`; coverage gate 80%). Never hardcode the DSN.
+- Large data / perf: `python -m scripts.seed.seed_large create|drop`, `python -m scripts.perf.run`.
+- Rules: SQL only via `sql.Identifier` after `discovery.get_table` / `col_info` checks, values bound; every route needs `require_role` (a test enforces it); errors use the envelope in `app/errors.py`.
 
 ## Architecture (the parts that span files)
 
@@ -42,5 +51,5 @@ Data flow: `LayerConfig` (plain JSON in `state/layersStore.js`) + loaded GeoJSON
 
 ## Rules from the design docs
 
-- The browser never connects to PostgreSQL and never sends SQL; the FastAPI backend (not yet built) owns credentials and builds queries from structured filters.
+- The browser never connects to PostgreSQL and never sends SQL; the FastAPI backend (`backend/`) owns credentials and builds queries from structured filters.
 - Dependencies point one way: `ui -> state -> layers -> data/styling`.

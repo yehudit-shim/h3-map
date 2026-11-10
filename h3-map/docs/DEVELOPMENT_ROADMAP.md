@@ -223,34 +223,44 @@ P1-01 → P2-01 → P3-01 → P6-01 → P6-03 → P6-05 → (P4-02, P5-02, P7-01
 
 ## Phase 6: PostgreSQL/PostGIS integration
 
-- [ ] **P6-01 · Auth and RBAC (minimum viable)** (MVP)
+**Status (6A backend): P6-01 to P6-08 implemented** (131 backend tests, 93% coverage). Not run: Schemathesis contract tests and the large-table performance measurements. P6-09/P6-10 (frontend) are Phase 6B.
+
+- [x] **P6-01 · Auth and RBAC (minimum viable)** (MVP)
+  - **Implementation status:** HS256 JWT bearer, `POST /auth/login` for a single admin from env, roles viewer/editor/admin via `require_role` dependencies; a test walks all routes and fails if one has no auth dependency (only `/health` and `/auth/login` are public). Tests: 401 (missing/expired/bad signature), role matrix.
   - Tech: JWT bearer, OIDC-ready; MVP can use a single-admin local login or static API key behind a reverse proxy, but the **authorisation checks must exist** for every route (dependency injection).
   - Deps: P1-06 · Critical · M
   - Acceptance: unauthenticated access returns 401; role matrix tests pass; see Q3.
-- [ ] **P6-02 · Connection manager and pools** (MVP)
+- [x] **P6-02 · Connection manager and pools** (MVP)
+  - **Implementation status:** `connections.yaml` with secrets from env; one lazy `AsyncConnectionPool` per connection (read-only session, statement/idle/lock timeouts via connection options); SSRF host guard; `POST /connections/{id}/test`. Tests: no password in responses or captured logs, pool recovery after backends are killed, read-only even for a superuser pool. Not done: user-defined connections (POST/PATCH/DELETE), encryption, per-user grants.
   - Tech: env-defined connections first; encrypted user-defined connections second; psycopg3 async pool; session read-only + timeouts; host guard.
   - Deps: P6-01 · Critical · L
   - Acceptance: connect/test works; password never in responses/logs (test); pool failure recovery test.
-- [ ] **P6-03 · Catalogue discovery endpoints** (MVP)
+- [x] **P6-03 · Catalogue discovery endpoints** (MVP)
+  - **Implementation status:** Databases, schemas (+tableCount), tables/views/matviews/partitioned/foreign with `kind`, `geo`, `q` filters, columns, geometry columns from `pg_attribute` typmod (works for views) with sampling for unconstrained/mixed columns, privilege-aware. Tests compare with catalogue SQL on the fixtures, including a limited role. Known gap: PostGIS helper views still appear in lists.
   - Tech: databases, schemas, tables/views, columns; geometry columns incl. views; privileges respected.
   - Deps: P6-02 · Critical · M
   - Acceptance: results match `psql` on the fixture DB incl. view and materialised view.
-- [ ] **P6-04 · Table profile (SRID, extent, count, indexes, H3 detection)** (MVP)
+- [x] **P6-04 · Table profile (SRID, extent, count, indexes, H3 detection)** (MVP)
+  - **Implementation status:** Profile with SRID, `ST_EstimatedExtent` (fallback bounded `ST_Extent`, reprojected to 4326), reltuples incl. -1, PK, indexes with spatial flag, H3 candidates, `recommendedStrategy`, warnings (no spatial index with a CREATE INDEX suggestion, no PK, SRID 0, mixed, never analysed, stale stats). Fixture tests pass. NOT MEASURED: latency on a 10M-row table (target < 500 ms).
   - Tech: per DATABASE_INTEGRATION.md §3; `ST_EstimatedExtent`; reltuples; strategy recommender; warnings.
   - Deps: P6-03 · Critical · L
   - Acceptance: all fields correct on fixtures incl. SRID 0, mixed type, no index, un-analysed table; < 500 ms on 10M-row table.
-- [ ] **P6-05 · Filter grammar and query builder; features endpoint** (MVP)
+- [x] **P6-05 · Filter grammar and query builder; features endpoint** (MVP)
+  - **Implementation status:** Filter grammar (depth 6, 50 nodes), identifiers verified and composed with `sql.Identifier`, values bound, bbox by transforming the envelope, GeoJSON output, simplification on output by zoom, `truncated`, bbox required above a size, `POST /features/query`, `GET /features/{id}`, disconnect cancels the query. Tests: injection suite, EXPLAIN shows the GiST index, Hypothesis bbox vs brute-force `ST_Intersects` (exact for 4326/geography, 0.002 degree margin for projected tables), writes impossible. Arrow output not implemented.
   - Tech: safe composition, bbox with envelope transform, simplification, caps, GeoJSON/Arrow outputs.
   - Deps: P6-03 · Critical · L
   - Acceptance: injection test suite passes; EXPLAIN shows index use; results equal brute-force on fixtures.
-- [ ] **P6-06 · Rows preview and column stats endpoints** (MVP)
+- [x] **P6-06 · Rows preview and column stats endpoints** (MVP)
+  - **Implementation status:** `/rows` (keyset `after` or offset, limit <= 1000, sort, geometry as WKT), `/stats` (min/max/mean/stddev/quantiles/histogram/distinct/topValues), `/extent` (optional filter). Tests compare with SQL.
   - Tech: keyset pagination, stats/histogram/quantiles/top values.
   - Deps: P6-05 · High · M · Acceptance: preview paginated; stats used by the styling engine.
-- [ ] **P6-07 · MVT tile endpoint with sessions** (MVP)
+- [x] **P6-07 · MVT tile endpoint with sessions** (MVP)
+  - **Implementation status:** Tile sessions, `ST_AsMVT`/`ST_AsMVTGeom`, 204 for empty, `Cache-Control` and ETag (304), per-tile feature cap, zoom-based simplification, TileJSON. Tests decode tiles (counts, ids, properties, geometry validity) and run 50 concurrent requests. NOT MEASURED: cold p95 on a 1M-row polygon table (target < 800 ms).
   - Tech: `ST_AsMVT`/`ST_AsMVTGeom`, session registry, ETag/cache headers, feature caps, zoom-dependent simplification.
   - Deps: P6-05 · Critical · L
   - Acceptance: 1M-row polygon table serves p95 < 800 ms cold; tile decode tests pass.
-- [ ] **P6-08 · H3 endpoints (cells, aggregate, info, polyfill)** (MVP)
+- [x] **P6-08 · H3 endpoints (cells, aggregate, info, polyfill)** (MVP)
+  - **Implementation status:** `/h3/cells` (h3index/bigint/text, roll-up, `maxCells` coarsening reports the resolution used), `/h3/aggregate` (h3-pg or h3-py engine), `/h3/resolutions`, `/h3/polyfill`, `/h3/cells/info`, `/h3/cells/children` (delta <= 4). Parity test: 10k points through h3-py, h3-pg and h3-js with a committed fixture. NOT MEASURED: 1M-cell viewport time (target < 500 ms). `cells/export` not implemented.
   - Tech: per API_SPECIFICATION.md §8; bigint→hex; `max_cells` coarsening; Arrow option later.
   - Deps: P6-04, P5-01 · Critical · L
   - Acceptance: parity tests (h3-py vs SQL vs h3-js) pass; 1M-cell table viewport < 500 ms.

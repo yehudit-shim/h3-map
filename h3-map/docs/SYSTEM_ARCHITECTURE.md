@@ -257,6 +257,19 @@ Changes relative to the design above, made while implementing the first two phas
 | Basemaps | self-hosted | CARTO Positron / Dark Matter public styles (OpenStreetMap data) + Blank, overridable by env | Fast to start. Review CARTO's terms before production use; self-hosting remains task P2-06. If a style fails to load the map falls back to Blank and shows a toast. |
 | Testing | Vitest + Playwright | Vitest (+ Testing Library, jsdom) and `playwright-core` driving the system Chrome/Chromium (`npm run test:e2e`) | No browser download is needed; `@playwright/test` can replace the script later. |
 
+### Backend deviations (Phase 6A)
+
+| Area | Design | Implemented | Reason |
+|---|---|---|---|
+| Tiles | `GET /connections/{c}/tiles/{schema}/{table}/{z}/{x}/{y}.mvt` (DATABASE_INTEGRATION section 4) | Sessions: `POST /connections/{id}/tiles/sessions`, `GET /tiles/{sessionId}/{z}/{x}/{y}.mvt`, `/tilejson`, `DELETE` | API_SPECIFICATION is the source of truth. Sessions are in memory (TTL 8 h), owned by the creating user (admin may read) and not shared across processes. |
+| Connections | admin-managed CRUD, encrypted user connections | Only `connections.yaml` / env with secrets from the environment; `GET`, `GET /{id}`, `POST /{id}/test` (editor). No POST/PATCH/DELETE | User-defined connections are optional in the prompt. No per-user grants: every authenticated user sees every env connection. |
+| Auth | OIDC-ready JWT | HS256 JWT, single admin from env; other roles only via tokens | Minimum viable P6-01. |
+| Features | `limit` / `after` | Ordered keyset paging only with `paginate=true` or `after`; `format=arrow` not implemented | Avoids an ORDER BY on large bbox queries. |
+| H3 | h3-pg or h3-py | SQL roll-ups use the bigint bit layout (no extension needed); point binning uses h3-pg when installed (`H3MAP_H3_SQL=auto`), else h3-py on a bbox-limited scan (`max_h3_scan_rows`). `/h3/cells/export` not implemented | Works on databases without the h3 extension; export is out of scope. |
+| Catalogue | hide system objects | PostGIS helper views (`geometry_columns`, `raster_columns`, `spatial_ref_sys`) still appear in table lists | Not yet filtered. |
+| Windows | n/a | `app/__init__.py` selects the selector event loop; run uvicorn with `--loop none` | psycopg async cannot use the Proactor loop. |
+| Docker | `docker-compose.yml` with postgis | Not provided in Phase 6A | The project owner runs PostgreSQL themselves. |
+
 ### Layer pipeline as built
 
 ```
