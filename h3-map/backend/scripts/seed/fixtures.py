@@ -3,7 +3,7 @@
     python -m scripts.seed.fixtures postgresql://user:pw@host:5432/db
 
 Everything is generated from fixed seeds, so two runs produce identical rows.
-Roles created: gis_reader (SELECT on fx), gis_limited (one table only).
+Roles created: h3map_test_reader (SELECT on fx), h3map_test_limited (one table only).
 """
 from __future__ import annotations
 
@@ -156,18 +156,18 @@ def build(conn: psycopg.Connection, with_h3_ext: bool = False) -> None:
         ex(f"ANALYZE fx.{t}")
     ex("DROP TABLE fx.raw")
 
-    for role, pw in (("gis_reader", READER_PW), ("gis_limited", LIMITED_PW)):
+    for role, pw in (("h3map_test_reader", READER_PW), ("h3map_test_limited", LIMITED_PW)):
         ex(f"DROP OWNED BY {role}") if conn.execute("SELECT 1 FROM pg_roles WHERE rolname=%s", (role,)).fetchone() else None
         ex(f"DROP ROLE IF EXISTS {role}")
         ex(f"CREATE ROLE {role} LOGIN PASSWORD '{pw}' NOINHERIT")
         ex(f"GRANT CONNECT ON DATABASE {conn.info.dbname} TO {role}")
         ex(f"ALTER ROLE {role} SET default_transaction_read_only = on")
-    ex("GRANT USAGE ON SCHEMA public TO gis_reader, gis_limited")  # PostGIS functions / geometry_columns
-    ex("GRANT USAGE ON SCHEMA fx TO gis_reader, gis_limited")
-    ex("GRANT SELECT ON ALL TABLES IN SCHEMA fx TO gis_reader")
-    ex("GRANT USAGE ON SCHEMA fx_hidden TO gis_reader")
-    ex("GRANT SELECT ON fx_hidden.secret TO gis_reader")
-    ex("GRANT SELECT ON fx.pts_4326 TO gis_limited")
+    ex("GRANT USAGE ON SCHEMA public TO h3map_test_reader, h3map_test_limited")  # PostGIS functions / geometry_columns
+    ex("GRANT USAGE ON SCHEMA fx TO h3map_test_reader, h3map_test_limited")
+    ex("GRANT SELECT ON ALL TABLES IN SCHEMA fx TO h3map_test_reader")
+    ex("GRANT USAGE ON SCHEMA fx_hidden TO h3map_test_reader")
+    ex("GRANT SELECT ON fx_hidden.secret TO h3map_test_reader")
+    ex("GRANT SELECT ON fx.pts_4326 TO h3map_test_limited")
 
 
 if __name__ == "__main__":  # pragma: no cover

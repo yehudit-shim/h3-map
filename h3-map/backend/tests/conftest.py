@@ -13,7 +13,6 @@ import pytest_asyncio
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-os.environ.setdefault("TESTCONTAINERS_RYUK_DISABLED", "true")
 
 from app.auth.jwt import User, create_token  # noqa: E402
 from app.config import Settings  # noqa: E402
@@ -23,24 +22,37 @@ from scripts.seed import fixtures as fx  # noqa: E402
 
 from app.logging_setup import RedactingFilter  # noqa: E402
 
-DEFAULT_IMAGE = "anastasia-postgis-h3:17"  # local image with PostGIS + h3-pg; CI can use postgis/postgis:17-3.5
 ADMIN_PW = "s3cret-admin-pw"
 
 
 @pytest.fixture(scope="session")
 def pg_server():
-    """Throw-away PostGIS container with the deterministic fixtures. Yields connection facts."""
-    from testcontainers.community.postgres import PostgresContainer
+    """Fixture database `h3map_test`, created on the existing local PostgreSQL server (no Docker) and dropped at
+    the end. The server's own databases are never touched. Requires H3MAP_TEST_ADMIN_DSN (superuser DSN); never hardcode it."""
+    from psycopg.conninfo import conninfo_to_dict
 
-    image = os.environ.get("TEST_PG_IMAGE", DEFAULT_IMAGE)
-    with PostgresContainer(image, username="postgres", password="postgres_admin_pw", dbname="fixtures") as pg:
-        host, port = pg.get_container_host_ip(), int(pg.get_exposed_port(5432))
-        admin_dsn = f"postgresql://postgres:postgres_admin_pw@{host}:{port}/fixtures"
-        with psycopg.connect(admin_dsn, autocommit=True) as c:
-            has_ext = c.execute("SELECT 1 FROM pg_available_extensions WHERE name='h3'").fetchone() is not None
-            fx.build(c, with_h3_ext=has_ext)
-        yield {"host": host, "port": port, "db": "fixtures", "admin_dsn": admin_dsn, "h3": has_ext,
-               "container": pg}
+    dsn = os.environ.get("H3MAP_TEST_ADMIN_DSN")
+    if not dsn:
+        pytest.exit("Set H3MAP_TEST_ADMIN_DSN to a superuser DSN of the local PostgreSQL server "
+                    "(e.g. postgresql://user:password@localhost:5432/postgres). Tests create and drop a scratch database h3map_test.",
+                    returncode=2)
+    info = conninfo_to_dict(dsn)
+    host, port = info.get("host", "localhost"), int(info.get("port", 5432))
+    user, pw = info["user"], info.get("password", "")
+    test_db = "h3map_test"
+    with psycopg.connect(dsn, autocommit=True) as c:
+        c.execute(f"DROP DATABASE IF EXISTS {test_db} WITH (FORCE)")
+        c.execute(f"CREATE DATABASE {test_db}")
+    admin_dsn = f"postgresql://{user}:{pw}@{host}:{port}/{test_db}"
+    with psycopg.connect(admin_dsn, autocommit=True) as c:
+        has_ext = c.execute("SELECT 1 FROM pg_available_extensions WHERE name='h3'").fetchone() is not None
+        fx.build(c, with_h3_ext=has_ext)
+    try:
+        yield {"host": host, "port": port, "db": test_db, "admin_dsn": admin_dsn, "h3": has_ext,
+               "admin_user": user, "admin_pw": pw}
+    finally:
+        with psycopg.connect(dsn, autocommit=True) as c:
+            c.execute(f"DROP DATABASE IF EXISTS {test_db} WITH (FORCE)")
 
 
 @pytest.fixture(scope="session")
@@ -62,9 +74,9 @@ def settings() -> Settings:
 def make_defs(pg_server) -> dict[str, ConnectionDef]:
     base = dict(host=pg_server["host"], port=pg_server["port"], database=pg_server["db"], sslmode="disable")
     return {
-        "fixtures": ConnectionDef(id="fixtures", name="Fixtures", username="gis_reader", password=fx.READER_PW, **base),
-        "limited": ConnectionDef(id="limited", name="Limited", username="gis_limited", password=fx.LIMITED_PW, **base),
-        "admin": ConnectionDef(id="admin", name="Superuser", username="postgres", password="postgres_admin_pw", **base),
+        "fixtures": ConnectionDef(id="fixtures", name="Fixtures", username="h3map_test_reader", password=fx.READER_PW, **base),
+        "limited": ConnectionDef(id="limited", name="Limited", username="h3map_test_limited", password=fx.LIMITED_PW, **base),
+        "admin": ConnectionDef(id="admin", name="Superuser", username=pg_server["admin_user"], password=pg_server["admin_pw"], **base),
         "down": ConnectionDef(id="down", name="Down", username="x", password="down-pw-123", host="127.0.0.1", port=1,
                               database="nodb", sslmode="disable"),
     }
@@ -102,3 +114,34 @@ def H(auth):
 def caplog_all(caplog):
     caplog.set_level(logging.DEBUG)
     return caplog
+
+
+@pytest.fixture(scope="session")
+def live_server(pg_server, settings):
+    """A real uvicorn server (own app instance, own pools) for sync clients and Hypothesis."""
+    import socket
+    import threading
+    import time
+
+    import uvicorn
+
+    s = socket.socket()
+    s.bind(("127.0.0.1", 0))
+    port = s.getsockname()[1]
+    s.close()
+    server = uvicorn.Server(uvicorn.Config(create_app(settings, make_defs(pg_server)), host="127.0.0.1", port=port,
+                                           log_level="warning", lifespan="on"))
+    import asyncio
+
+    def run():  # psycopg async needs a selector loop; uvicorn would pick the Proactor loop on Windows
+        asyncio.run(server.serve(), loop_factory=asyncio.SelectorEventLoop)
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    for _ in range(100):
+        if server.started:
+            break
+        time.sleep(0.1)
+    yield f"http://127.0.0.1:{port}"
+    server.should_exit = True
+    t.join(timeout=10)

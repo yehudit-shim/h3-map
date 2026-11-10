@@ -8,17 +8,17 @@ from app.services.connections import ConnectionDef, check_host, load_connection_
 from app.errors import ApiError
 from scripts.seed.fixtures import READER_PW, LIMITED_PW
 
-SECRETS = [READER_PW, LIMITED_PW, "postgres_admin_pw", "down-pw-123"]
+SECRETS = [READER_PW, LIMITED_PW, "down-pw-123"]
 
 
-async def test_list_and_get_have_no_password(client, H):
+async def test_list_and_get_have_no_password(client, H, pg_server):
     r = await client.get("/api/v1/connections", headers=H)
     assert r.status_code == 200
     ids = {c["id"] for c in r.json()}
     assert {"fixtures", "limited", "down"} <= ids
     for c in r.json():
         assert "password" not in c and c["readOnly"] is True and c["source"] == "env"
-    for s in SECRETS:
+    for s in SECRETS + [pg_server["admin_pw"]]:
         assert s not in r.text
     assert (await client.get("/api/v1/connections/nope", headers=H)).status_code == 404
 
@@ -41,13 +41,13 @@ async def test_down_connection_is_502_without_leaks(client, auth, caplog_all):
     assert "down-pw-123" not in text
 
 
-async def test_no_secret_in_any_log(client, auth, caplog_all):
+async def test_no_secret_in_any_log(client, auth, caplog_all, pg_server):
     caplog_all.set_level(logging.DEBUG)
     for cid in ("fixtures", "limited", "down"):
         await client.post(f"/api/v1/connections/{cid}/test", headers=auth["editor"])
     await client.get("/api/v1/connections", headers=auth["viewer"])
     blob = "\n".join(rec.getMessage() + (rec.exc_text or "") for rec in caplog_all.records)
-    for s in SECRETS:
+    for s in SECRETS + [pg_server["admin_pw"]]:
         assert s not in blob, f"secret leaked into logs: {s[:3]}***"
 
 
@@ -69,7 +69,7 @@ async def test_session_is_read_only_with_timeouts(app):
 async def test_pool_recovers_after_backends_killed(app, client, auth, admin_dsn):
     assert (await client.post("/api/v1/connections/fixtures/test", headers=auth["editor"])).status_code == 200
     with psycopg.connect(admin_dsn, autocommit=True) as c:
-        n = c.execute("SELECT count(pg_terminate_backend(pid)) FROM pg_stat_activity WHERE usename='gis_reader' AND pid<>pg_backend_pid()").fetchone()[0]
+        n = c.execute("SELECT count(pg_terminate_backend(pid)) FROM pg_stat_activity WHERE usename='h3map_test_reader' AND pid<>pg_backend_pid()").fetchone()[0]
     assert n >= 1
     r = await client.post("/api/v1/connections/fixtures/test", headers=auth["editor"])
     assert r.status_code == 200, r.text

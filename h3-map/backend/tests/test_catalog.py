@@ -12,22 +12,22 @@ def psql(admin_dsn, sql, params=()):
 
 async def test_databases(client, H, admin_dsn):
     got = [d["name"] for d in (await client.get(f"{BASE}/databases", headers=H)).json()]
-    exp = [r["datname"] for r in psql(admin_dsn, "SELECT datname FROM pg_database WHERE NOT datistemplate AND has_database_privilege('gis_reader', datname,'CONNECT') ORDER BY 1")]
-    assert got == exp and "fixtures" in got
+    exp = [r["datname"] for r in psql(admin_dsn, "SELECT datname FROM pg_database WHERE NOT datistemplate AND has_database_privilege('h3map_test_reader', datname,'CONNECT') ORDER BY 1")]
+    assert got == exp and "h3map_test" in got
 
 
 async def test_schemas_match_psql(client, H, admin_dsn):
     got = {s["name"]: s["tableCount"] for s in (await client.get(f"{BASE}/schemas", headers=H)).json()}
     assert "fx" in got and "pg_catalog" not in got and "information_schema" not in got
     exp = psql(admin_dsn, "SELECT count(*)::int AS n FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
-                          "WHERE n.nspname='fx' AND c.relkind IN ('r','v','m','p','f') AND has_table_privilege('gis_reader', c.oid,'SELECT')")
+                          "WHERE n.nspname='fx' AND c.relkind IN ('r','v','m','p','f') AND has_table_privilege('h3map_test_reader', c.oid,'SELECT')")
     assert got["fx"] == exp[0]["n"]
 
 
 async def test_tables_match_psql_incl_view_matview_partition(client, H, admin_dsn):
     got = {t["name"]: t for t in (await client.get(f"{BASE}/schemas/fx/tables", headers=H)).json()}
     exp = psql(admin_dsn, "SELECT c.relname, c.relkind FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
-                          "WHERE n.nspname='fx' AND c.relkind IN ('r','v','m','p','f') AND has_table_privilege('gis_reader', c.oid,'SELECT')")
+                          "WHERE n.nspname='fx' AND c.relkind IN ('r','v','m','p','f') AND has_table_privilege('h3map_test_reader', c.oid,'SELECT')")
     assert set(got) == {r["relname"] for r in exp}
     assert got["v_pts"]["kind"] == "view" and got["mv_pts"]["kind"] == "matview"
     assert got["part_events"]["kind"] == "partitioned" and got["pts_4326"]["kind"] == "table"

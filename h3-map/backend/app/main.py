@@ -6,6 +6,7 @@ import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api.v1 import router as v1_router
@@ -38,6 +39,7 @@ def create_app(settings: Settings | None = None, connection_defs: dict | None = 
     app.state.pools = pools
     app.dependency_overrides[get_settings] = lambda: settings
     install_handlers(app)
+    app.add_middleware(GZipMiddleware, minimum_size=1024)
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=False,
                        allow_methods=["GET", "POST", "DELETE", "OPTIONS"], allow_headers=["Authorization", "Content-Type"],
                        expose_headers=["ETag", "X-Request-Id"])
