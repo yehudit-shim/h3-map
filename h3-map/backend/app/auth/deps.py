@@ -3,10 +3,15 @@ from __future__ import annotations
 
 import jwt as pyjwt
 from fastapi import Depends, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from ..config import Settings, get_settings
 from ..errors import ApiError
 from .jwt import ROLE_RANK, User, decode_token
+
+
+# Registers the "Authorize" button in Swagger UI (/api/v1/docs). auto_error=False: the 401 envelope below is ours.
+_scheme = HTTPBearer(auto_error=False, description="Token from POST /api/v1/auth/login (`accessToken`).")
 
 
 def _bearer(request: Request) -> str | None:
@@ -20,7 +25,8 @@ def require_role(min_role: str):
     if min_role not in ROLE_RANK:
         raise ValueError(min_role)
 
-    async def dependency(request: Request, settings: Settings = Depends(get_settings)) -> User:
+    async def dependency(request: Request, settings: Settings = Depends(get_settings),
+                         _creds: HTTPAuthorizationCredentials | None = Depends(_scheme)) -> User:
         token = _bearer(request)
         if token is None:
             raise ApiError(401, "unauthenticated", "Missing bearer token.", headers={"WWW-Authenticate": "Bearer"})

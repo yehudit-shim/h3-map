@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import secrets
 import uuid
 from contextlib import asynccontextmanager
 
@@ -10,6 +11,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api.v1 import router as v1_router
+from .api.v1.setup import needs_setup
 from .config import API_VERSION, Settings, get_settings
 from .errors import install_handlers
 from .logging_setup import register_secret, setup_logging
@@ -21,7 +23,7 @@ log = logging.getLogger("h3map")
 def create_app(settings: Settings | None = None, connection_defs: dict | None = None) -> FastAPI:
     settings = settings or get_settings()
     setup_logging(settings.log_level)
-    for s in (settings.admin_password, settings.jwt_secret):
+    for s in (settings.admin_password, settings.jwt_secret, settings.ldap_bind_password):
         if s is not None:
             register_secret(s.get_secret_value())
 
@@ -33,6 +35,10 @@ def create_app(settings: Settings | None = None, connection_defs: dict | None = 
         register_secret(settings.app_database_url.get_secret_value())
         store = UserConnectionStore(settings.app_database_url.get_secret_value(), settings.encryption_key.get_secret_value())
     pools = PoolManager(settings, defs, store)
+    user_store = None
+    if settings.app_database_url:
+        from .services.users import UserStore
+        user_store = UserStore(settings.app_database_url.get_secret_value())
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -40,6 +46,8 @@ def create_app(settings: Settings | None = None, connection_defs: dict | None = 
             await pools.load_user_defs()
         except Exception as exc:  # the app DB being down must not stop the env connections from working
             log.warning("could not load user connections: %s", type(exc).__name__)
+        if await needs_setup(app, settings):
+            log.warning("FIRST-RUN SETUP REQUIRED. Open the app, click Sign in, and enter this setup token: %s", app.state.setup_token)
         yield
         await pools.close()
 
@@ -47,6 +55,8 @@ def create_app(settings: Settings | None = None, connection_defs: dict | None = 
                   openapi_url="/api/v1/openapi.json", docs_url="/api/v1/docs", redoc_url=None)
     app.state.settings = settings
     app.state.pools = pools
+    app.state.user_store = user_store
+    app.state.setup_token = secrets.token_urlsafe(24)  # one-time key for first-run setup; printed only when setup is open
     app.dependency_overrides[get_settings] = lambda: settings
     install_handlers(app)
     app.add_middleware(GZipMiddleware, minimum_size=1024)

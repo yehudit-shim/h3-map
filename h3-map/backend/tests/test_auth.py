@@ -6,7 +6,8 @@ from fastapi.routing import APIRoute
 from app.auth.jwt import hash_password, verify_hash
 from tests.conftest import ADMIN_PW, token_for
 
-PUBLIC = {("GET", "/api/v1/health"), ("POST", "/api/v1/auth/login")}
+PUBLIC = {("GET", "/api/v1/health"), ("POST", "/api/v1/auth/login"), ("GET", "/api/v1/setup/status"),
+          ("POST", "/api/v1/setup/test-database"), ("POST", "/api/v1/setup")}
 
 
 def _dep_calls(dependant):

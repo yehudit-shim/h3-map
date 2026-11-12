@@ -24,7 +24,7 @@
     "deck.gl": "^9.4.1",
     "h3-js": "^4.5.0",
     "lucide-react": "^1.71.0",
-    "maplibre-gl": "^6.17.0",
+    "maplibre-gl": "^6.18.0",
     "papaparse": "^5.7.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

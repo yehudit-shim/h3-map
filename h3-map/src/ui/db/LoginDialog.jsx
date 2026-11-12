@@ -1,10 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { LogIn } from 'lucide-react'
+import { getSetupStatus } from '../../api/index.js'
 import { useAuthStore } from '../../state/authStore.js'
 import { useUiStore } from '../../state/uiStore.js'
 import { Button } from '../Button.jsx'
 import Dialog from '../Dialog.jsx'
 import { Spinner } from '../feedback.jsx'
+import SetupForm from './SetupForm.jsx'
 
 const inputCls = 'h-9 w-full rounded-md border border-line bg-raised px-2.5 text-[13px] text-fg outline-none placeholder:text-muted focus-visible:border-accent'
 
@@ -48,16 +50,31 @@ export function LoginForm({ onDone, autoFocus = true }) {
   )
 }
 
+/** Sign-in, or the first-run setup form while the server reports that nobody can sign in yet. */
+function DialogBody({ onDone }) {
+  const [needsSetup, setNeedsSetup] = useState(null) // null while the server is being asked
+  useEffect(() => {
+    const ctl = new AbortController()
+    getSetupStatus({ signal: ctl.signal }).then((r) => setNeedsSetup(!!r.needsSetup), () => setNeedsSetup(false))
+    return () => ctl.abort()
+  }, [])
+  if (needsSetup === null) return <div className="flex justify-center p-6"><Spinner label="Contacting the server" /></div>
+  if (needsSetup) return <div className="p-4"><SetupForm onDone={onDone} /></div>
+  return (
+    <div className="p-4">
+      <p className="mb-3 text-[12px] leading-snug text-muted">The browser never connects to PostgreSQL. You sign in to the map server, which holds the database credentials.</p>
+      <LoginForm onDone={onDone} />
+    </div>
+  )
+}
+
 export default function LoginDialog() {
   const open = useUiStore((s) => s.loginOpen)
   const close = useUiStore((s) => s.closeLogin)
   if (!open) return null
   return (
-    <Dialog title="Sign in to the database server" titleId="login-title" onClose={close} width={380} testId="login-dialog">
-      <div className="p-4">
-        <p className="mb-3 text-[12px] leading-snug text-muted">The browser never connects to PostgreSQL. You sign in to the map server, which holds the database credentials.</p>
-        <LoginForm onDone={close} />
-      </div>
+    <Dialog title="Sign in to the database server" titleId="login-title" onClose={close} width={440} testId="login-dialog">
+      <DialogBody onDone={close} />
     </Dialog>
   )
 }

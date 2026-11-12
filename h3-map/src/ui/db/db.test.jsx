@@ -47,7 +47,7 @@ describe('sign-in', () => {
   it('signs in through the form, opens the Database tab and keeps the token out of every store and storage', async () => {
     useUiStore.getState().openLogin()
     render(<LoginDialog />)
-    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'admin' } })
+    fireEvent.change(await screen.findByLabelText('Username'), { target: { value: 'admin' } })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'right' } })
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
     await waitFor(() => expect(useAuthStore.getState().status).toBe('signed-in'))
@@ -63,11 +63,48 @@ describe('sign-in', () => {
   it('shows the server message for a wrong password and stays signed out', async () => {
     useUiStore.getState().openLogin()
     render(<LoginDialog />)
-    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'admin' } })
+    fireEvent.change(await screen.findByLabelText('Username'), { target: { value: 'admin' } })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'nope' } })
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
     expect(await screen.findByTestId('login-error')).toHaveTextContent('Invalid username or password.')
     expect(useAuthStore.getState().status).toBe('signed-out')
+  })
+
+  it('shows the server message (not "invalid password") when the sign-in directory is down (503)', async () => {
+    mock.server.use(http.post(`${API}/auth/login`, () => HttpResponse.json(
+      { error: { code: 'auth_unavailable', message: 'The sign-in directory is not reachable. Try again later.', details: {}, requestId: 'r1' } },
+      { status: 503 })))
+    useUiStore.getState().openLogin()
+    render(<LoginDialog />)
+    fireEvent.change(await screen.findByLabelText('Username'), { target: { value: 'alice' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secret' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect(await screen.findByTestId('login-error')).toHaveTextContent('The sign-in directory is not reachable.')
+    expect(useAuthStore.getState().status).toBe('signed-out')
+  })
+
+  it('shows first-run setup instead of sign-in while the server has no users, then signs in as the new admin', async () => {
+    mock.flags.needsSetup = true
+    useUiStore.getState().openLogin()
+    render(<LoginDialog />)
+    expect(await screen.findByTestId('setup-form')).toBeInTheDocument()
+    expect(screen.queryByTestId('login-form')).toBeNull()
+    const set = (label, value) => fireEvent.change(screen.getByLabelText(label), { target: { value } })
+    set('Setup token', 'bad-token')
+    set('Database name', 'appmeta')
+    set('Database user', 'h3map')
+    set('Database password', 'db-secret-pw')
+    set('Admin username', 'admin')
+    set('Admin password', 'right')
+    fireEvent.click(screen.getByRole('button', { name: /Set up and sign in/ }))
+    expect(await screen.findByTestId('setup-error')).toHaveTextContent('Wrong setup token.')
+    expect(useAuthStore.getState().status).toBe('signed-out')
+    set('Setup token', 'good-token')
+    fireEvent.click(screen.getByRole('button', { name: /Set up and sign in/ }))
+    await waitFor(() => expect(useAuthStore.getState().status).toBe('signed-in'))
+    const sent = mock.calls.find((c) => c.method === 'POST' && c.path === '/setup')
+    expect(sent).toBeTruthy()
+    expect(JSON.stringify({ ...localStorage })).not.toContain('db-secret-pw')
   })
 
   it('the Database tab asks for a sign-in first', () => {

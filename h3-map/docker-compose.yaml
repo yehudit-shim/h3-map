@@ -1,0 +1,22 @@
+services:
+  postgres:
+    build: .
+    image: postgres17-gis
+    container_name: postgres17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: anastasia
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: anastasia
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U anastasia -d anastasia"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

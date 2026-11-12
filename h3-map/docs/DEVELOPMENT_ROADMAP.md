@@ -340,7 +340,7 @@ Write-back/editing of PostGIS features; multi-user collaboration; timeline/tempo
 |---|---|---|
 | Q1 | JS + JSDoc or migrate to TypeScript? (recommend TypeScript: the layer config contracts are central) | P1-09 |
 | Q2 | Is the `h3-pg` PostgreSQL extension available/allowed on target databases, or must H3 stay in ETL/h3-py? | P6-08 |
-| Q3 | Authentication: built-in local users, or OIDC (Keycloak etc.)? Single-tenant or multi-tenant? | P6-01 |
+| Q3 | Authentication: built-in local users, or OIDC (Keycloak etc.)? Single-tenant or multi-tenant? **Answered: LDAP login** (app login only; DB access keeps the shared service account), local admin kept as break-glass. | P6-01 |
 | Q4 | Should users be able to enter DB credentials in the browser UI, or only admin-configured connections? (recommend admin-configured for MVP) | P6-02 |
 | Q5 | Tile serving: FastAPI `ST_AsMVT` only, or add Martin? | P9-06 |
 | Q6 | Project licence (MIT/Apache-2.0/AGPL?) and acceptable licences for deps (PostGIS is GPL, used as a separate service) | P1-10 |

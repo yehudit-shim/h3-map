@@ -17,6 +17,10 @@ const tbl = (id, schema, table) => `${conn(id)}/tables/${e(schema)}/${e(table)}`
 // ---- auth / system -----------------------------------------------------------------------------
 export const login = (username, password, { signal } = {}) =>
   api.request('/auth/login', { method: 'POST', body: { username, password }, signal, auth: false })
+// First-run setup (public routes; the server only honours them while nobody can sign in yet).
+export const getSetupStatus = ({ signal } = {}) => api.request('/setup/status', { signal, auth: false })
+export const testSetupDatabase = (body, { signal } = {}) => api.request('/setup/test-database', { method: 'POST', body, signal, auth: false })
+export const runSetup = (body, { signal } = {}) => api.request('/setup', { method: 'POST', body, signal, auth: false })
 export const getMe = ({ signal } = {}) => api.request('/me', { signal })
 export const getConfig = ({ signal } = {}) => api.request('/config', { signal })
 

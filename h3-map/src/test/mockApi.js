@@ -60,6 +60,19 @@ export function createMockApi(flags = {}) {
     return resolver(info)
   }
   const handlers = [
+    http.get(`${API}/setup/status`, () => HttpResponse.json({ needsSetup: !!flags.needsSetup })),
+    http.post(`${API}/setup/test-database`, async ({ request }) => {
+      log(request)
+      const b = await request.json()
+      return b.setupToken === 'good-token' ? HttpResponse.json({ ok: true }) : envelope(403, 'forbidden', 'Wrong setup token.')
+    }),
+    http.post(`${API}/setup`, async ({ request }) => {
+      log(request)
+      const b = await request.json()
+      if (b.setupToken !== 'good-token') return envelope(403, 'forbidden', 'Wrong setup token.')
+      flags.needsSetup = false
+      return HttpResponse.json({ ok: true, adopted: false }, { status: 201 })
+    }),
     http.post(`${API}/auth/login`, async ({ request }) => {
       log(request)
       const body = await request.json()

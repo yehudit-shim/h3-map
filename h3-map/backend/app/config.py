@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 API_VERSION = "0.1.0"
@@ -19,6 +20,26 @@ class Settings(BaseSettings):
     # Either a plain password (dev) or a hash made by app.auth.jwt.hash_password.
     admin_password: SecretStr | None = None
     admin_password_hash: str | None = None
+
+    # --- LDAP login (optional; the local admin above stays as break-glass) -----
+    ldap_enabled: bool = False
+    ldap_url: str | None = None  # ldaps://host:636 or ldap://host:389 (+ ldap_start_tls)
+    ldap_start_tls: bool = False
+    ldap_ca_file: str | None = None  # PEM bundle; certificates are always validated for ldaps/start_tls
+    ldap_bind_dn: str | None = None  # service account used to find the user's DN (anonymous when unset)
+    ldap_bind_password: SecretStr | None = None
+    ldap_base_dn: str | None = None
+    ldap_user_filter: str = "(uid={username})"  # Active Directory: (sAMAccountName={username})
+    ldap_timeout_s: float = Field(5.0, gt=0, le=60)
+    ldap_default_role: Literal["viewer", "editor", "admin"] = "viewer"
+    ldap_admin_users: list[str] = []  # usernames promoted to admin (case-insensitive)
+    ldap_editor_users: list[str] = []
+
+    # --- PostgreSQL role login: the application database server checks the name and password (see auth/pg_auth.py) ---
+    pg_auth_enabled: bool = True
+    pg_admin_role: str = "h3map_admin"  # members (and superusers) become admin
+    pg_editor_role: str = "h3map_editor"  # members become editor
+    pg_default_role: Literal["viewer", "editor", "admin"] = "viewer"
 
     # --- connections ------------------------------------------------------
     connections_file: str | None = "connections.yaml"
@@ -60,7 +81,17 @@ class Settings(BaseSettings):
     encryption_key: SecretStr | None = None  # Fernet key: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     log_level: str = "INFO"
 
+    @model_validator(mode="after")
+    def _check_ldap(self) -> "Settings":
+        if self.ldap_enabled:
+            if not self.ldap_url or not self.ldap_base_dn:
+                raise ValueError("ldap_enabled requires ldap_url and ldap_base_dn")
+            if "{username}" not in self.ldap_user_filter:
+                raise ValueError("ldap_user_filter must contain {username}")
+        return self
+
 
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    from . import bootstrap  # imported here: bootstrap does not depend on this module
+    return bootstrap.apply(Settings())

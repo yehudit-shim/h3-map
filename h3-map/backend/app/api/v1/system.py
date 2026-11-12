@@ -31,7 +31,8 @@ async def public_config(user: User = Depends(viewer), s: Settings = Depends(get_
                        "maxFeaturesNoBbox": s.max_features_no_bbox, "maxH3Cells": s.max_h3_cells,
                        "maxRowsLimit": s.max_rows_limit, "tileFeatureCap": s.tile_feature_cap},
             "thresholds": {"json": s.threshold_json, "bbox": s.threshold_bbox, "mvt": s.threshold_mvt},
-            "featureFlags": {"arrow": True, "userConnections": s.app_database_url is not None and s.encryption_key is not None}}
+            "featureFlags": {"arrow": True, "userConnections": s.app_database_url is not None and s.encryption_key is not None,
+                             "ldap": s.ldap_enabled}}
 
 
 @router.get("/me")
